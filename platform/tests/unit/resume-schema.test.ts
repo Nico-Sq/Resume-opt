@@ -66,6 +66,126 @@ describe('ResumeDocumentV1', () => {
     expect(parsed.sectionsById[id]?.title).toBe('开源贡献');
   });
 
+  it('accepts populated entries for every supported module kind', () => {
+    const document = createDocument();
+    let counter = 100;
+    const nextId = () => `00000000-0000-4000-8000-${String(counter++).padStart(12, '0')}` as const;
+    const period = { start: '2024-01', end: '2024-06', current: false } as const;
+    const block = (text: string) => ({ id: nextId(), text });
+
+    for (const sectionValue of Object.values(document.sectionsById)) {
+      switch (sectionValue.kind) {
+        case 'education':
+          sectionValue.entries = [
+            {
+              id: nextId(),
+              period,
+              bullets: [block('主修课程与成绩说明')],
+              school: '示例大学',
+              major: '计算机科学',
+              degree: '本科',
+              city: '上海',
+              courses: ['数据结构'],
+              grade: '前 20%',
+            },
+          ];
+          break;
+        case 'work':
+        case 'internship':
+          sectionValue.entries = [
+            {
+              id: nextId(),
+              period,
+              bullets: [block('完成可验证的项目交付')],
+              organization: '示例公司',
+              role: '前端工程师',
+              city: '上海',
+              employmentType: '全职',
+            },
+          ];
+          break;
+        case 'project':
+          sectionValue.entries = [
+            {
+              id: nextId(),
+              period,
+              bullets: [block('负责项目交付')],
+              name: '简历平台',
+              role: '负责人',
+              background: block('解决简历编辑可靠性问题'),
+              actions: [block('设计结构化编辑模型')],
+              results: [block('完成可靠性验证')],
+              technologies: ['TypeScript'],
+              links: [
+                { id: nextId(), label: '项目链接', url: 'https://example.com', visible: true },
+              ],
+            },
+          ];
+          break;
+        case 'campus':
+          sectionValue.entries = [
+            {
+              id: nextId(),
+              period,
+              bullets: [block('组织技术活动')],
+              organization: '技术社团',
+              role: '负责人',
+              activity: '组织分享与复盘',
+            },
+          ];
+          break;
+        case 'skillsCertificates':
+          sectionValue.entries = [
+            {
+              id: nextId(),
+              type: 'skill',
+              name: 'TypeScript',
+              proficiency: null,
+              issuer: null,
+              obtainedAt: null,
+              description: block('能够完成全栈开发'),
+            },
+          ];
+          break;
+        case 'awards':
+          sectionValue.entries = [
+            {
+              id: nextId(),
+              name: '示例奖项',
+              level: '校级',
+              issuer: '示例大学',
+              awardedAt: '2024-06',
+              description: block('基于真实事实的说明'),
+            },
+          ];
+          break;
+        default:
+          break;
+      }
+    }
+
+    const customId = nextId();
+    document.sectionsById[customId] = {
+      id: customId,
+      kind: 'custom',
+      title: '开源贡献',
+      visible: true,
+      entries: [
+        {
+          id: nextId(),
+          period,
+          bullets: [block('提交经过验证的修复')],
+          heading: '示例项目',
+          subheading: '贡献者',
+          links: [],
+        },
+      ],
+    };
+    document.moduleOrder.push(customId);
+
+    expect(ResumeDocumentV1Schema.safeParse(document).success).toBe(true);
+  });
+
   it('rejects duplicated IDs anywhere in the document', () => {
     const document = createDocument();
     const basic = firstSection(document);
