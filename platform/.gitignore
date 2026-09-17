@@ -1,0 +1,6 @@
+node_modules/
+.test-data/
+artifacts/
+.env
+.env.*
+!.env.example

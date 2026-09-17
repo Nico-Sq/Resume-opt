@@ -1,0 +1,12 @@
+{
+  "name": "resume-platform",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "scripts": {
+    "typecheck": "pnpm --filter @resume/save-reliability typecheck",
+    "test:save": "pnpm --filter @resume/save-reliability test",
+    "test:save:unit": "pnpm --filter @resume/save-reliability test:unit",
+    "test:save:pg": "pnpm --filter @resume/save-reliability test:pg"
+  }
+}
