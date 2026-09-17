@@ -10,6 +10,7 @@ const validInput = {
   PG_TEST_URL: 'postgresql://test:secret@db.local:5432/resume_opt_test',
   DEV_FIXED_USER_ID: '00000000-0000-4000-8000-000000000001',
   DEV_FIXED_RESUME_ID: '00000000-0000-4000-8000-000000000002',
+  DEV_FIXED_VERSION_ID: '00000000-0000-4000-8000-000000000003',
 };
 
 describe('server runtime configuration', () => {

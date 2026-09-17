@@ -3,19 +3,23 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "dotenv -e ../../.env.local -- next dev",
     "build": "next build",
+    "start": "dotenv -e ../../.env.local -- next start",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@resume/application": "workspace:*",
     "@resume/config": "workspace:*",
     "@resume/infrastructure": "workspace:*",
     "next": "16.3.5",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@types/react": "19.3.0",
-    "@types/react-dom": "19.3.0"
+    "@types/react-dom": "19.3.0",
+    "dotenv-cli": "11.0.0"
   }
 }

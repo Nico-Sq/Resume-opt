@@ -16,6 +16,7 @@ export const ServerRuntimeConfigSchema = z
     DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(20).default(5),
     DEV_FIXED_USER_ID: z.uuid().optional(),
     DEV_FIXED_RESUME_ID: z.uuid().optional(),
+    DEV_FIXED_VERSION_ID: z.uuid().optional(),
   })
   .superRefine((value, context) => {
     if (value.AUTH_MODE === 'fixed' && !['local', 'test'].includes(value.APP_ENV)) {
@@ -27,7 +28,11 @@ export const ServerRuntimeConfigSchema = z
     }
 
     if (value.AUTH_MODE === 'fixed') {
-      for (const key of ['DEV_FIXED_USER_ID', 'DEV_FIXED_RESUME_ID'] as const) {
+      for (const key of [
+        'DEV_FIXED_USER_ID',
+        'DEV_FIXED_RESUME_ID',
+        'DEV_FIXED_VERSION_ID',
+      ] as const) {
         if (!value[key]) {
           context.addIssue({ code: 'custom', path: [key], message: '固定身份模式必须配置该值' });
         }

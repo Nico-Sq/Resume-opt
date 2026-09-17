@@ -6,13 +6,18 @@
   "exports": {
     ".": "./src/index.ts",
     "./database-schema": "./src/database/schema.ts",
+    "./fixed-identity": "./src/identity/fixed-identity.ts",
     "./migrations": "./src/database/migrations.ts",
-    "./postgres": "./src/postgres.ts"
+    "./postgres": "./src/postgres.ts",
+    "./resume-seed": "./src/resume/seed-fixed-resume.ts",
+    "./resume-transactions": "./src/resume/postgres-user-transactions.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@resume/application": "workspace:*",
+    "@resume/domain": "workspace:*",
     "drizzle-orm": "0.45.2",
     "pg": "8.23.0"
   },

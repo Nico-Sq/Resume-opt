@@ -13,12 +13,13 @@
     "build": "pnpm --filter @resume/web build",
     "lint": "eslint apps packages tests",
     "format:check": "prettier --check .",
-    "typecheck": "pnpm -r --if-present typecheck",
+    "typecheck": "tsc --noEmit && pnpm -r --if-present typecheck",
     "boundaries:check": "depcruise --config .dependency-cruiser.cjs apps packages --output-type err",
     "contracts:generate": "tsx scripts/generate-resume-schema.ts",
     "contracts:check": "tsx scripts/generate-resume-schema.ts --check",
     "db:migrate": "node --env-file=.env.local --import tsx scripts/migrate.ts --database=dev",
     "db:migrate:test": "node --env-file=.env.local --import tsx scripts/migrate.ts --database=test",
+    "db:seed:dev": "node --env-file=.env.local --import tsx scripts/seed-development.ts",
     "test:migrations": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run tests/integration/migrations.test.ts",
     "test:unit": "vitest run --dir tests/unit",
     "test:integration": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --dir tests/integration",
@@ -28,6 +29,7 @@
     "test:save:pg": "pnpm --filter @resume/save-reliability test:pg"
   },
   "devDependencies": {
+    "@resume/application": "workspace:*",
     "@resume/config": "workspace:*",
     "@resume/domain": "workspace:*",
     "@resume/infrastructure": "workspace:*",
