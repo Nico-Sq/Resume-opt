@@ -1,0 +1,119 @@
+# AI 简历平台
+
+面向中国大陆用户的 AI 简历编辑与优化平台。仓库目前处于 V0.1 开发阶段，首期聚焦一份固定测试简历的结构化编辑、保存、预览和恢复能力；AI 优化、JD 匹配、完整诊断、会员与支付暂不进入正式 V0.1 实现。
+
+## 当前进度
+
+- 已完成正式 Monorepo、运行配置和 PostgreSQL 角色隔离。
+- 已完成 Resume Schema V1、初始迁移、固定开发身份和固定简历初始化。
+- 已提供编辑器启动与简历读取接口，并通过所有权、RLS、损坏数据和幂等初始化测试。
+- 正在进入编辑命令、编辑 Store、A4 Renderer 和模块管理阶段。
+
+详细状态参见 [V0.1 交付计划](./v0.1-delivery-plan.md)。
+
+## 仓库结构
+
+```text
+.
+├─ platform/          正式产品代码（Next.js + TypeScript + PostgreSQL）
+│  ├─ apps/web/       Web 应用与 Route Handlers
+│  ├─ packages/       领域、应用、基础设施、渲染器、UI 和配置包
+│  ├─ database/       数据库迁移和 Drizzle 定义
+│  ├─ experiments/    保存可靠性验证实验
+│  └─ tests/          单元测试与数据库集成测试
+├─ prototype-test/    React + Vite 可用性测试原型
+├─ product-design.md  产品范围与业务设计
+├─ ux-interaction-spec.md
+├─ design.mf          视觉设计规范
+└─ technical-selection.md
+```
+
+`output/prototypes/` 只存放可重复导出的图片，不进入版本控制。测试原型实际使用的视觉资源位于 `prototype-test/public/prototypes/`。
+
+## 技术栈
+
+- Next.js App Router、React、TypeScript
+- PostgreSQL、Drizzle ORM、Zod
+- pnpm workspace、Vitest、ESLint、Prettier、dependency-cruiser
+- React + Vite 测试原型
+
+正式架构和工程约束见 [技术选型文档](./technical-selection.md)。
+
+## 环境要求
+
+- Node.js `20.19.0`
+- pnpm `10.28.2`
+- 可访问的 PostgreSQL 实例
+- Windows PowerShell（当前开发和验证环境；其他系统可使用等价命令）
+
+## 启动正式项目
+
+```powershell
+Set-Location platform
+corepack enable
+pnpm install --frozen-lockfile
+Copy-Item .env.example .env.local
+```
+
+编辑 `platform/.env.local`，为开发应用、迁移和测试分别配置最小权限数据库账号。不要提交真实密码或连接串。
+
+```powershell
+pnpm test:migrations
+pnpm db:migrate
+pnpm db:seed:dev
+pnpm dev
+```
+
+本地固定身份只允许在 `local` 或 `test` 环境使用。生产环境必须接入真实认证，浏览器不能指定或切换 `userId`。
+
+当前服务端入口：
+
+- `GET /api/health/live`
+- `GET /api/health/ready`
+- `GET /api/v1/editor-bootstrap`
+- `GET /api/v1/resumes/:id`
+
+## 运行测试原型
+
+```powershell
+Set-Location prototype-test
+npm ci
+npm test
+npm run dev
+```
+
+原型只在浏览器本地模拟 AI、诊断、导出和支付，不调用真实 AI、不连接正式后端、不发生真实支付。测试操作记录保存在 `localStorage`，可导出为 JSON。
+
+## 质量门禁
+
+在 `platform/` 下运行：
+
+```powershell
+pnpm ci:fast
+pnpm test:integration
+pnpm test:migrations
+pnpm test:save
+pnpm build
+```
+
+提交信息遵循 Conventional Commits，例如：
+
+```text
+feat: 新增简历创建和编辑功能
+fix: 修复右侧面板无法收起的问题
+docs: 补充数据库和API设计文档
+```
+
+## 产品与设计文档
+
+- [产品设计](./product-design.md)
+- [UX 交互规范](./ux-interaction-spec.md)
+- [视觉设计规范](./design.mf)
+- [技术选型](./technical-selection.md)
+- [V0.1 交付计划](./v0.1-delivery-plan.md)
+
+## 安全说明
+
+- `.env.local`、数据库密码、令牌和本机构建产物必须保持未跟踪。
+- 示例配置只能使用占位凭据。
+- 如发现安全问题，请不要在公开 Issue 中粘贴密钥、用户数据或完整数据库连接串。
