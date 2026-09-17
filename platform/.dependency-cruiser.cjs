@@ -31,7 +31,9 @@ module.exports = {
       name: 'client-no-server',
       severity: 'error',
       from: { path: '(^|/)apps/web/src/client/' },
-      to: { path: '(^|/)(apps/web/src/server/|packages/(application|infrastructure)/)' },
+      to: {
+        path: '(^|/)(apps/web/src/server/|packages/(application|infrastructure)/|packages/config/src/server\\.ts$)',
+      },
     },
     {
       name: 'no-private-package-imports',

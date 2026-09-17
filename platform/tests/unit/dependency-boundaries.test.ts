@@ -35,6 +35,7 @@ describe('dependency boundary checker', () => {
   it.each([
     ['domain-to-infrastructure', 'domain-is-pure'],
     ['client-to-infrastructure', 'client-no-server'],
+    ['client-to-server-config', 'client-no-server'],
     ['package-to-app', 'packages-no-apps'],
     ['private-package-import', 'no-private-package-imports'],
     ['circular', 'no-circular'],

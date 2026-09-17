@@ -11,6 +11,12 @@ importers:
       '@eslint/js':
         specifier: 9.39.1
         version: 9.39.1
+      '@resume/config':
+        specifier: workspace:*
+        version: link:packages/config
+      '@resume/infrastructure':
+        specifier: workspace:*
+        version: link:packages/infrastructure
       '@types/node':
         specifier: 22.20.3
         version: 22.20.3
@@ -38,6 +44,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@resume/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@resume/infrastructure':
+        specifier: workspace:*
+        version: link:../../packages/infrastructure
       next:
         specifier: 16.3.5
         version: 16.3.5(@babel/core@7.29.7)(@types/node@22.20.3)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -75,11 +87,23 @@ importers:
 
   packages/application: {}
 
-  packages/config: {}
+  packages/config:
+    dependencies:
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
 
   packages/domain: {}
 
-  packages/infrastructure: {}
+  packages/infrastructure:
+    dependencies:
+      pg:
+        specifier: 8.23.0
+        version: 8.23.0
+    devDependencies:
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
 
   packages/resume-renderer: {}
 
