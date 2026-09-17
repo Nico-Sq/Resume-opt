@@ -1,5 +1,21 @@
-/product-design.md
-/design.mf
+# Dependencies and build output
+**/node_modules/
+**/dist/
+**/.next/
+**/coverage/
+**/*.tsbuildinfo
+
+# Local environment and credentials
+**/.env
+**/.env.*
+!**/.env.example
+
+# Generated prototype exports (the runnable prototype keeps its own assets)
 /output/prototypes/
-/.env
-/.env.*
+
+# Logs and local tooling
+**/*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
