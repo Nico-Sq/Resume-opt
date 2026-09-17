@@ -1,3 +1,12 @@
+export {
+  applyResumeEditCommand,
+  ResumeEditError,
+  type EditablePrimitive,
+  type ResumeEditCommand,
+  type ResumeEditErrorCode,
+  type StringListField,
+  type TextBlockListField,
+} from './commands';
 export { createInitialResumeDocument, type IdFactory } from './default';
 export { migrateResumeDocument, SchemaVersionUnsupportedError } from './migration';
 export {
