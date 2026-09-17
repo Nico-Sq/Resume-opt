@@ -2,6 +2,7 @@
   "name": "resume-platform",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@10.28.2",
   "engines": {
     "node": "20.19.0",
@@ -14,15 +15,18 @@
     "format:check": "prettier --check .",
     "typecheck": "pnpm -r --if-present typecheck",
     "boundaries:check": "depcruise --config .dependency-cruiser.cjs apps packages --output-type err",
+    "contracts:generate": "tsx scripts/generate-resume-schema.ts",
+    "contracts:check": "tsx scripts/generate-resume-schema.ts --check",
     "test:unit": "vitest run --dir tests/unit",
     "test:integration": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --dir tests/integration",
-    "ci:fast": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries:check && pnpm test:unit",
+    "ci:fast": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries:check && pnpm contracts:check && pnpm test:unit",
     "test:save": "pnpm --filter @resume/save-reliability test",
     "test:save:unit": "pnpm --filter @resume/save-reliability test:unit",
     "test:save:pg": "pnpm --filter @resume/save-reliability test:pg"
   },
   "devDependencies": {
     "@resume/config": "workspace:*",
+    "@resume/domain": "workspace:*",
     "@resume/infrastructure": "workspace:*",
     "@eslint/js": "9.39.1",
     "@types/node": "22.20.3",
@@ -30,8 +34,10 @@
     "eslint": "9.39.1",
     "eslint-config-next": "16.3.5",
     "prettier": "3.9.7",
+    "tsx": "4.23.13",
     "typescript": "5.9.3",
     "typescript-eslint": "8.57.0",
-    "vitest": "5.0.1"
+    "vitest": "5.0.1",
+    "zod": "4.6.5"
   }
 }

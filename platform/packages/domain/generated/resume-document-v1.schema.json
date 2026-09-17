@@ -1,0 +1,1029 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "type": "number", "const": 1 },
+    "locale": { "type": "string", "minLength": 2, "maxLength": 35 },
+    "stage": { "type": "string", "enum": ["student", "employed", "transition"] },
+    "sectionsById": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+      },
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": { "type": "string", "const": "basic" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "visible": { "type": "boolean" },
+              "entries": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "name": { "type": "string", "maxLength": 200 },
+                    "avatarAssetId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        { "type": "null" }
+                      ]
+                    },
+                    "avatarVisible": { "type": "boolean" },
+                    "phone": {
+                      "type": "object",
+                      "properties": {
+                        "value": { "type": "string", "maxLength": 200 },
+                        "visible": { "type": "boolean" }
+                      },
+                      "required": ["value", "visible"],
+                      "additionalProperties": false
+                    },
+                    "email": {
+                      "type": "object",
+                      "properties": {
+                        "value": { "type": "string", "maxLength": 200 },
+                        "visible": { "type": "boolean" }
+                      },
+                      "required": ["value", "visible"],
+                      "additionalProperties": false
+                    },
+                    "city": {
+                      "type": "object",
+                      "properties": {
+                        "value": { "type": "string", "maxLength": 200 },
+                        "visible": { "type": "boolean" }
+                      },
+                      "required": ["value", "visible"],
+                      "additionalProperties": false
+                    },
+                    "links": {
+                      "maxItems": 20,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "label": { "type": "string", "maxLength": 100 },
+                          "url": { "type": "string", "maxLength": 2048 },
+                          "visible": { "type": "boolean" }
+                        },
+                        "required": ["id", "label", "url", "visible"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "avatarAssetId",
+                    "avatarVisible",
+                    "phone",
+                    "email",
+                    "city",
+                    "links"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["id", "kind", "title", "visible", "entries"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": { "type": "string", "const": "intent" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "visible": { "type": "boolean" },
+              "entries": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "targetRole": { "type": "string", "maxLength": 200 },
+                    "industries": {
+                      "maxItems": 20,
+                      "type": "array",
+                      "items": { "type": "string", "maxLength": 200 }
+                    },
+                    "cities": {
+                      "maxItems": 20,
+                      "type": "array",
+                      "items": { "type": "string", "maxLength": 200 }
+                    },
+                    "employmentType": { "type": "string", "maxLength": 200 }
+                  },
+                  "required": ["id", "targetRole", "industries", "cities", "employmentType"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["id", "kind", "title", "visible", "entries"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": { "type": "string", "const": "summary" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "visible": { "type": "boolean" },
+              "entries": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "blocks": {
+                      "maxItems": 20,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "text": { "type": "string", "maxLength": 4000 }
+                        },
+                        "required": ["id", "text"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["id", "blocks"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["id", "kind", "title", "visible", "entries"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": { "type": "string", "const": "education" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "visible": { "type": "boolean" },
+              "entries": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "period": {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "anyOf": [
+                            { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                            { "type": "null" }
+                          ]
+                        },
+                        "end": {
+                          "anyOf": [
+                            { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                            { "type": "null" }
+                          ]
+                        },
+                        "current": { "type": "boolean" }
+                      },
+                      "required": ["start", "end", "current"],
+                      "additionalProperties": false
+                    },
+                    "bullets": {
+                      "maxItems": 50,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "text": { "type": "string", "maxLength": 4000 }
+                        },
+                        "required": ["id", "text"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "school": { "type": "string", "maxLength": 200 },
+                    "major": { "type": "string", "maxLength": 200 },
+                    "degree": { "type": "string", "maxLength": 200 },
+                    "city": { "type": "string", "maxLength": 200 },
+                    "courses": {
+                      "maxItems": 30,
+                      "type": "array",
+                      "items": { "type": "string", "maxLength": 200 }
+                    },
+                    "grade": {
+                      "anyOf": [{ "type": "string", "maxLength": 200 }, { "type": "null" }]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "period",
+                    "bullets",
+                    "school",
+                    "major",
+                    "degree",
+                    "city",
+                    "courses",
+                    "grade"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["id", "kind", "title", "visible", "entries"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": { "type": "string", "const": "work" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "visible": { "type": "boolean" },
+              "entries": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "period": {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "anyOf": [
+                            { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                            { "type": "null" }
+                          ]
+                        },
+                        "end": {
+                          "anyOf": [
+                            { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                            { "type": "null" }
+                          ]
+                        },
+                        "current": { "type": "boolean" }
+                      },
+                      "required": ["start", "end", "current"],
+                      "additionalProperties": false
+                    },
+                    "bullets": {
+                      "maxItems": 50,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "text": { "type": "string", "maxLength": 4000 }
+                        },
+                        "required": ["id", "text"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "organization": { "type": "string", "maxLength": 200 },
+                    "role": { "type": "string", "maxLength": 200 },
+                    "city": { "type": "string", "maxLength": 200 },
+                    "employmentType": { "type": "string", "maxLength": 200 }
+                  },
+                  "required": [
+                    "id",
+                    "period",
+                    "bullets",
+                    "organization",
+                    "role",
+                    "city",
+                    "employmentType"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["id", "kind", "title", "visible", "entries"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": { "type": "string", "const": "project" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "visible": { "type": "boolean" },
+              "entries": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "period": {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "anyOf": [
+                            { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                            { "type": "null" }
+                          ]
+                        },
+                        "end": {
+                          "anyOf": [
+                            { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                            { "type": "null" }
+                          ]
+                        },
+                        "current": { "type": "boolean" }
+                      },
+                      "required": ["start", "end", "current"],
+                      "additionalProperties": false
+                    },
+                    "bullets": {
+                      "maxItems": 50,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "text": { "type": "string", "maxLength": 4000 }
+                        },
+                        "required": ["id", "text"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "name": { "type": "string", "maxLength": 200 },
+                    "role": { "type": "string", "maxLength": 200 },
+                    "background": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "text": { "type": "string", "maxLength": 4000 }
+                      },
+                      "required": ["id", "text"],
+                      "additionalProperties": false
+                    },
+                    "actions": {
+                      "maxItems": 50,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "text": { "type": "string", "maxLength": 4000 }
+                        },
+                        "required": ["id", "text"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "results": {
+                      "maxItems": 50,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "text": { "type": "string", "maxLength": 4000 }
+                        },
+                        "required": ["id", "text"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "technologies": {
+                      "maxItems": 50,
+                      "type": "array",
+                      "items": { "type": "string", "maxLength": 200 }
+                    },
+                    "links": {
+                      "maxItems": 20,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "label": { "type": "string", "maxLength": 100 },
+                          "url": { "type": "string", "maxLength": 2048 },
+                          "visible": { "type": "boolean" }
+                        },
+                        "required": ["id", "label", "url", "visible"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "period",
+                    "bullets",
+                    "name",
+                    "role",
+                    "background",
+                    "actions",
+                    "results",
+                    "technologies",
+                    "links"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["id", "kind", "title", "visible", "entries"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": { "type": "string", "const": "internship" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "visible": { "type": "boolean" },
+              "entries": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "period": {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "anyOf": [
+                            { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                            { "type": "null" }
+                          ]
+                        },
+                        "end": {
+                          "anyOf": [
+                            { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                            { "type": "null" }
+                          ]
+                        },
+                        "current": { "type": "boolean" }
+                      },
+                      "required": ["start", "end", "current"],
+                      "additionalProperties": false
+                    },
+                    "bullets": {
+                      "maxItems": 50,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "text": { "type": "string", "maxLength": 4000 }
+                        },
+                        "required": ["id", "text"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "organization": { "type": "string", "maxLength": 200 },
+                    "role": { "type": "string", "maxLength": 200 },
+                    "city": { "type": "string", "maxLength": 200 },
+                    "employmentType": { "type": "string", "maxLength": 200 }
+                  },
+                  "required": [
+                    "id",
+                    "period",
+                    "bullets",
+                    "organization",
+                    "role",
+                    "city",
+                    "employmentType"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["id", "kind", "title", "visible", "entries"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": { "type": "string", "const": "campus" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "visible": { "type": "boolean" },
+              "entries": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "period": {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "anyOf": [
+                            { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                            { "type": "null" }
+                          ]
+                        },
+                        "end": {
+                          "anyOf": [
+                            { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                            { "type": "null" }
+                          ]
+                        },
+                        "current": { "type": "boolean" }
+                      },
+                      "required": ["start", "end", "current"],
+                      "additionalProperties": false
+                    },
+                    "bullets": {
+                      "maxItems": 50,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "text": { "type": "string", "maxLength": 4000 }
+                        },
+                        "required": ["id", "text"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "organization": { "type": "string", "maxLength": 200 },
+                    "role": { "type": "string", "maxLength": 200 },
+                    "activity": { "type": "string", "maxLength": 4000 }
+                  },
+                  "required": ["id", "period", "bullets", "organization", "role", "activity"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["id", "kind", "title", "visible", "entries"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": { "type": "string", "const": "skillsCertificates" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "visible": { "type": "boolean" },
+              "entries": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "type": { "type": "string", "enum": ["skill", "certificate"] },
+                    "name": { "type": "string", "maxLength": 200 },
+                    "proficiency": {
+                      "anyOf": [{ "type": "string", "maxLength": 200 }, { "type": "null" }]
+                    },
+                    "issuer": {
+                      "anyOf": [{ "type": "string", "maxLength": 200 }, { "type": "null" }]
+                    },
+                    "obtainedAt": {
+                      "anyOf": [
+                        { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                        { "type": "null" }
+                      ]
+                    },
+                    "description": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "text": { "type": "string", "maxLength": 4000 }
+                      },
+                      "required": ["id", "text"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "type",
+                    "name",
+                    "proficiency",
+                    "issuer",
+                    "obtainedAt",
+                    "description"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["id", "kind", "title", "visible", "entries"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": { "type": "string", "const": "awards" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "visible": { "type": "boolean" },
+              "entries": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "name": { "type": "string", "maxLength": 200 },
+                    "level": { "type": "string", "maxLength": 200 },
+                    "issuer": { "type": "string", "maxLength": 200 },
+                    "awardedAt": {
+                      "anyOf": [
+                        { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                        { "type": "null" }
+                      ]
+                    },
+                    "description": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "text": { "type": "string", "maxLength": 4000 }
+                      },
+                      "required": ["id", "text"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["id", "name", "level", "issuer", "awardedAt", "description"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["id", "kind", "title", "visible", "entries"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": { "type": "string", "const": "selfEvaluation" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "visible": { "type": "boolean" },
+              "entries": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "blocks": {
+                      "maxItems": 20,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "text": { "type": "string", "maxLength": 4000 }
+                        },
+                        "required": ["id", "text"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["id", "blocks"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["id", "kind", "title", "visible", "entries"],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": { "type": "string", "const": "custom" },
+              "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+              "visible": { "type": "boolean" },
+              "entries": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "period": {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "anyOf": [
+                            { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                            { "type": "null" }
+                          ]
+                        },
+                        "end": {
+                          "anyOf": [
+                            { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+                            { "type": "null" }
+                          ]
+                        },
+                        "current": { "type": "boolean" }
+                      },
+                      "required": ["start", "end", "current"],
+                      "additionalProperties": false
+                    },
+                    "bullets": {
+                      "maxItems": 50,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "text": { "type": "string", "maxLength": 4000 }
+                        },
+                        "required": ["id", "text"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "heading": { "type": "string", "maxLength": 200 },
+                    "subheading": { "type": "string", "maxLength": 200 },
+                    "links": {
+                      "maxItems": 20,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "label": { "type": "string", "maxLength": 100 },
+                          "url": { "type": "string", "maxLength": 2048 },
+                          "visible": { "type": "boolean" }
+                        },
+                        "required": ["id", "label", "url", "visible"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["id", "period", "bullets", "heading", "subheading", "links"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["id", "kind", "title", "visible", "entries"],
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "moduleOrder": {
+      "maxItems": 50,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+      }
+    },
+    "templateId": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "templateVersion": { "type": "string", "minLength": 1, "maxLength": 50 },
+    "typography": {
+      "type": "object",
+      "properties": {
+        "fontFamilyId": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "bodyFontSizePt": { "type": "number", "minimum": 8, "maximum": 14 },
+        "lineHeight": { "type": "number", "minimum": 1, "maximum": 2 },
+        "sectionGapMm": { "type": "number", "minimum": 0, "maximum": 20 },
+        "paragraphGapMm": { "type": "number", "minimum": 0, "maximum": 20 },
+        "moduleOverrides": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "fontSizePt": { "type": "number", "minimum": 8, "maximum": 20 },
+              "fontWeight": { "type": "integer", "minimum": 400, "maximum": 700 }
+            },
+            "required": ["fontSizePt", "fontWeight"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "fontFamilyId",
+        "bodyFontSizePt",
+        "lineHeight",
+        "sectionGapMm",
+        "paragraphGapMm",
+        "moduleOverrides"
+      ],
+      "additionalProperties": false
+    },
+    "page": {
+      "type": "object",
+      "properties": {
+        "format": { "type": "string", "const": "A4" },
+        "marginMm": {
+          "type": "object",
+          "properties": {
+            "top": { "type": "number", "minimum": 8, "maximum": 30 },
+            "right": { "type": "number", "minimum": 8, "maximum": 30 },
+            "bottom": { "type": "number", "minimum": 8, "maximum": 30 },
+            "left": { "type": "number", "minimum": 8, "maximum": 30 }
+          },
+          "required": ["top", "right", "bottom", "left"],
+          "additionalProperties": false
+        },
+        "showPageNumbers": { "type": "boolean" }
+      },
+      "required": ["format", "marginMm", "showPageNumbers"],
+      "additionalProperties": false
+    },
+    "design": {
+      "type": "object",
+      "properties": {
+        "accentColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "headingColor": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "divider": { "type": "boolean" }
+      },
+      "required": ["accentColor", "headingColor", "divider"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "locale",
+    "stage",
+    "sectionsById",
+    "moduleOrder",
+    "templateId",
+    "templateVersion",
+    "typography",
+    "page",
+    "design"
+  ],
+  "additionalProperties": false
+}
