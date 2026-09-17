@@ -11,5 +11,12 @@
   },
   "dependencies": {
     "@resume/domain": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "react": "19.3.0"
   }
 }

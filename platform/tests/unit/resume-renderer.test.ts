@@ -1,5 +1,7 @@
 import { performance } from 'node:perf_hooks';
 
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -18,6 +20,8 @@ import {
   paginateRenderFlow,
   RENDER_POLICY_V1,
   RESUME_RENDERER_CSS,
+  ResumeMeasurementSurface,
+  ResumePages,
   RendererConfigurationError,
   type RenderFlowBlock,
 } from '@resume/resume-renderer';
@@ -333,6 +337,38 @@ describe('A4 metrics, styles and external preview scale', () => {
       '--resume-body-size': '10.5pt',
       '--resume-margin-top': '14mm',
       '--resume-heading-color': '#171717',
+    });
+  });
+
+  it('renders measurable A4 page DOM without executing user HTML or leaking internal IDs', () => {
+    const { document, nextId } = createFixture();
+    populateStandardDocument(document, nextId);
+    const basicEntry = sectionByKind(document, 'basic').entries[0];
+    if (!basicEntry) throw new Error('fixture 缺少基本信息条目');
+    basicEntry.name = '<script>alert(1)</script>';
+    const model = createResumeRenderModel(rendererInput(document));
+    const flow = createRenderFlow(model);
+    const pagination = paginateRenderFlow(
+      flow,
+      Object.fromEntries(flow.map((block) => [block.key, { heightPx: 10 }])),
+      100,
+    );
+
+    const pagesHtml = renderToStaticMarkup(
+      createElement(ResumePages, { model, pagination, assetsReady: true }),
+    );
+    const measurementHtml = renderToStaticMarkup(
+      createElement(ResumeMeasurementSurface, { model, flow }),
+    );
+
+    expect(pagesHtml).toContain('class="resume-page"');
+    expect(pagesHtml).toContain('data-render-ready="true"');
+    expect(pagesHtml).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(pagesHtml).not.toContain('<script>alert(1)</script>');
+    expect(measurementHtml).toContain('data-render-block-key="header"');
+    Object.keys(document.sectionsById).forEach((id) => {
+      expect(pagesHtml).not.toContain(id);
+      expect(measurementHtml).not.toContain(id);
     });
   });
 });

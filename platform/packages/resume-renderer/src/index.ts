@@ -41,3 +41,9 @@ export {
   type PreviewScaleMode,
 } from './preview-scale';
 export { createRendererCssVariables, RESUME_RENDERER_CSS } from './styles';
+export {
+  ResumeMeasurementSurface,
+  ResumePages,
+  type ResumeMeasurementSurfaceProps,
+  type ResumePagesProps,
+} from './components';
