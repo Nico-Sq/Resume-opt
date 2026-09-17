@@ -1,0 +1,13 @@
+{
+  "status": "provisional",
+  "editor": {
+    "inputToPreviewP95Ms": 100,
+    "saveRequestP95Ms": 500,
+    "initialRouteJavaScriptKbGzip": 250
+  },
+  "approval": {
+    "requiredAfterFirstBenchmark": true,
+    "approvedBy": null,
+    "approvedAt": null
+  }
+}

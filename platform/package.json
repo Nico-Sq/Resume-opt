@@ -3,10 +3,32 @@
   "version": "0.0.0",
   "private": true,
   "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": "20.19.0",
+    "pnpm": "10.28.2"
+  },
   "scripts": {
-    "typecheck": "pnpm --filter @resume/save-reliability typecheck",
+    "dev": "pnpm --filter @resume/web dev",
+    "build": "pnpm --filter @resume/web build",
+    "lint": "eslint apps packages tests",
+    "format:check": "prettier --check .",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "boundaries:check": "depcruise --config .dependency-cruiser.cjs apps packages --output-type err",
+    "test:unit": "vitest run --dir tests/unit",
+    "ci:fast": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries:check && pnpm test:unit",
     "test:save": "pnpm --filter @resume/save-reliability test",
     "test:save:unit": "pnpm --filter @resume/save-reliability test:unit",
     "test:save:pg": "pnpm --filter @resume/save-reliability test:pg"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@types/node": "22.20.3",
+    "dependency-cruiser": "17.4.3",
+    "eslint": "9.39.1",
+    "eslint-config-next": "16.3.5",
+    "prettier": "3.9.7",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.57.0",
+    "vitest": "5.0.1"
   }
 }

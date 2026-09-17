@@ -1,0 +1,13 @@
+{
+  "node": "20.19.0",
+  "pnpm": "10.28.2",
+  "typescript": "5.9.3",
+  "next": "16.3.5",
+  "react": "19.3.0",
+  "dependencyCruiser": "17.4.3",
+  "postgresql": "18",
+  "notes": {
+    "postgresql": "虚拟机 Docker 实例的目标主版本；部署前以 SELECT server_version_num 复核",
+    "fonts": "V0.1 工程基线仅使用系统字体回退；正式预览字体清单在 Renderer 阶段锁定"
+  }
+}

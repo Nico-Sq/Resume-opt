@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://resume-opt.local/schemas/business-policy.schema.json",
+  "title": "BusinessPolicy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["environment", "region", "effectiveAt", "policies"],
+  "properties": {
+    "environment": { "enum": ["fixture", "staging", "production"] },
+    "region": { "const": "CN" },
+    "effectiveAt": { "type": "string", "format": "date-time" },
+    "policies": { "type": "object" },
+    "approval": {
+      "type": "object",
+      "required": ["decisionId", "contentHash"],
+      "properties": {
+        "decisionId": { "type": "string", "minLength": 1 },
+        "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

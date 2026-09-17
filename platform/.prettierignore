@@ -1,0 +1,7 @@
+.next
+node_modules
+artifacts
+dist
+pnpm-lock.yaml
+.env*
+apps/web/next-env.d.ts
