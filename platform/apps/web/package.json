@@ -11,10 +11,14 @@
   "dependencies": {
     "@resume/application": "workspace:*",
     "@resume/config": "workspace:*",
+    "@resume/domain": "workspace:*",
     "@resume/infrastructure": "workspace:*",
+    "immer": "11.1.18",
     "next": "16.3.5",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "react-hook-form": "7.88.0",
+    "zustand": "5.0.15",
     "zod": "4.6.5"
   },
   "devDependencies": {
