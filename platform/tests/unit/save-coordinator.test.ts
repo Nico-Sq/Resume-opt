@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createInitialResumeDocument, type ResumeDocumentV1 } from '@resume/domain/resume';
-import type { PendingSaveEnvelope } from '../../apps/web/src/client/editor/persistence';
+import type {
+  PendingSaveEnvelope,
+  RemoteResumeSnapshot,
+} from '../../apps/web/src/client/editor/persistence';
 import {
   SaveCoordinator,
   SaveTransportError,
@@ -49,8 +52,13 @@ class MemorySavePersistence implements SavePersistence {
   readonly frozen: PendingSaveEnvelope[] = [];
   readonly acknowledged: Array<Parameters<SavePersistence['acknowledgePending']>[0]> = [];
   flushCount = 0;
+  private baseDocument: ResumeDocumentV1;
+  private baseRevision: string;
 
-  constructor(private readonly store: ResumeEditorStore) {}
+  constructor(private readonly store: ResumeEditorStore) {
+    this.baseDocument = store.getState().document;
+    this.baseRevision = store.getState().ackRevision;
+  }
 
   flush(): Promise<void> {
     this.flushCount += 1;
@@ -59,6 +67,15 @@ class MemorySavePersistence implements SavePersistence {
 
   getPendingEnvelope(): PendingSaveEnvelope | null {
     return this.pending;
+  }
+
+  getConflictContext() {
+    if (!this.pending) return null;
+    return {
+      baseRevision: this.baseRevision,
+      baseSnapshot: this.baseDocument,
+      pendingEnvelope: this.pending,
+    };
   }
 
   freezePending(envelope: PendingSaveEnvelope): Promise<void> {
@@ -82,6 +99,8 @@ class MemorySavePersistence implements SavePersistence {
     }
     this.acknowledged.push(input);
     this.pending = null;
+    this.baseDocument = input.baseSnapshot;
+    this.baseRevision = input.revision;
     return Promise.resolve(
       this.store.getState().acknowledge({
         clientSeq: input.clientSeq,
@@ -94,6 +113,31 @@ class MemorySavePersistence implements SavePersistence {
     if (this.pending?.idempotencyKey !== idempotencyKey) return Promise.resolve(false);
     this.pending = null;
     return Promise.resolve(true);
+  }
+
+  adoptRemote(snapshot: RemoteResumeSnapshot): Promise<void> {
+    this.pending = null;
+    this.baseDocument = snapshot.document;
+    this.baseRevision = snapshot.revision;
+    this.store.getState().replaceFromRemote({
+      document: snapshot.document,
+      revision: snapshot.revision,
+    });
+    return Promise.resolve();
+  }
+
+  rebaseLocalOntoRemote(snapshot: RemoteResumeSnapshot): Promise<void> {
+    this.pending = null;
+    this.baseDocument = snapshot.document;
+    this.baseRevision = snapshot.revision;
+    const state = this.store.getState();
+    this.store.getState().hydrateWorkingCopy({
+      document: state.document,
+      localSeq: state.localSeq,
+      ackedSeq: state.ackedSeq,
+      ackRevision: snapshot.revision,
+    });
+    return Promise.resolve();
   }
 }
 
@@ -347,6 +391,96 @@ describe('SaveCoordinator', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(transport.calls).toHaveLength(2);
     expect(transport.calls[1]?.envelope.idempotencyKey).not.toBe(rejected.envelope.idempotencyKey);
+    coordinator.dispose();
+  });
+
+  it('adopts a remote conflict snapshot only after explicit resolution', async () => {
+    const document = createInitialResumeDocument();
+    const sectionId = editableSectionId(document);
+    const store = createResumeEditorStore({ document, revision: '1' });
+    const persistence = new MemorySavePersistence(store);
+    const transport = new ControlledTransport();
+    const statuses: SaveCoordinatorStatus[] = [];
+    const resumeId = randomUUID();
+    const coordinator = new SaveCoordinator({
+      resumeId,
+      store,
+      persistence,
+      transport,
+      debounceMs: 0,
+      onStatus: (status) => statuses.push(status),
+    });
+    coordinator.start();
+    store.getState().dispatch({ type: 'set-section-title', sectionId, title: '本地修改' });
+    await vi.advanceTimersByTimeAsync(0);
+    const conflicted = transport.calls[0];
+    if (!conflicted) throw new Error('缺少冲突请求');
+    conflicted.result.reject(
+      new SaveTransportError('conflict', '版本冲突', { currentRevision: '2' }),
+    );
+    await settle();
+
+    expect(statuses.at(-1)).toMatchObject({ phase: 'conflict', currentRevision: '2' });
+    expect(coordinator.getConflictContext()).toMatchObject({
+      baseRevision: '1',
+      pendingEnvelope: conflicted.envelope,
+    });
+    expect(store.getState().document.sectionsById[sectionId]?.title).toBe('本地修改');
+
+    const remoteDocument = structuredClone(document);
+    const remoteSection = remoteDocument.sectionsById[sectionId];
+    if (!remoteSection) throw new Error('fixture 缺少服务器模块');
+    remoteSection.title = '服务器修改';
+    await expect(
+      coordinator.adoptRemote({ resumeId, document: remoteDocument, revision: '2' }),
+    ).resolves.toBe(true);
+    expect(store.getState()).toMatchObject({ ackRevision: '2', isDirty: false });
+    expect(store.getState().document.sectionsById[sectionId]?.title).toBe('服务器修改');
+    expect(statuses.at(-1)).toMatchObject({ phase: 'synced', revision: '2' });
+    coordinator.dispose();
+  });
+
+  it('rebases the full local snapshot and pauses safely when a second conflict occurs', async () => {
+    const document = createInitialResumeDocument();
+    const sectionId = editableSectionId(document);
+    const store = createResumeEditorStore({ document, revision: '1' });
+    const persistence = new MemorySavePersistence(store);
+    const transport = new ControlledTransport();
+    const statuses: SaveCoordinatorStatus[] = [];
+    const resumeId = randomUUID();
+    const coordinator = new SaveCoordinator({
+      resumeId,
+      store,
+      persistence,
+      transport,
+      debounceMs: 0,
+      onStatus: (status) => statuses.push(status),
+    });
+    coordinator.start();
+    store.getState().dispatch({ type: 'set-section-title', sectionId, title: '保留本地全文' });
+    await vi.advanceTimersByTimeAsync(0);
+    const first = transport.calls[0];
+    if (!first) throw new Error('缺少第一次冲突请求');
+    first.result.reject(new SaveTransportError('conflict', '版本冲突', { currentRevision: '2' }));
+    await settle();
+
+    const remoteDocument = createInitialResumeDocument();
+    const resolution = coordinator.rebaseLocalOntoRemote({
+      resumeId,
+      document: remoteDocument,
+      revision: '2',
+    });
+    await settle();
+    const second = transport.calls[1];
+    if (!second) throw new Error('缺少重定基线后的保存请求');
+    expect(second.envelope.baseRevision).toBe('2');
+    expect(second.envelope.idempotencyKey).not.toBe(first.envelope.idempotencyKey);
+    expect(second.envelope.document.sectionsById[sectionId]?.title).toBe('保留本地全文');
+    second.result.reject(new SaveTransportError('conflict', '再次冲突', { currentRevision: '3' }));
+    await resolution;
+    expect(statuses.at(-1)).toMatchObject({ phase: 'conflict', currentRevision: '3' });
+    expect(store.getState().document.sectionsById[sectionId]?.title).toBe('保留本地全文');
+    expect(store.getState().isDirty).toBe(true);
     coordinator.dispose();
   });
 });

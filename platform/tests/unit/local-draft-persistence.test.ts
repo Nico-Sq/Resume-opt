@@ -394,4 +394,81 @@ describe('LocalDraftController', () => {
     });
     await controller.dispose();
   });
+
+  it('persists an explicit conflict rebase and can later replace the working copy from remote', async () => {
+    const name = databaseName();
+    const draftScope = scope();
+    const base = createInitialResumeDocument();
+    const sectionId = base.moduleOrder[1];
+    if (!sectionId) throw new Error('fixture 缺少冲突模块');
+    const repository = new DexieLocalDraftRepository(name, () => fixedNow);
+    const store = createResumeEditorStore({ document: base, revision: '1' });
+    const controller = new LocalDraftController({
+      repository,
+      scope: draftScope,
+      store,
+      remoteDocument: base,
+      remoteRevision: '1',
+      debounceMs: 0,
+      now: () => fixedNow,
+      onStatus: () => undefined,
+    });
+    await controller.start();
+    store.getState().dispatch({ type: 'set-section-title', sectionId, title: '本地分支' });
+    await controller.flush();
+    const firstEnvelope: PendingSaveEnvelope = {
+      idempotencyKey: randomUUID(),
+      resumeId: draftScope.resumeId,
+      baseRevision: '1',
+      clientSeq: 1,
+      document: store.getState().document,
+      createdAt: fixedNow.toISOString(),
+    };
+    await controller.freezePending(firstEnvelope);
+    const remoteAtTwo = structuredClone(base);
+    const remoteAtTwoSection = remoteAtTwo.sectionsById[sectionId];
+    if (!remoteAtTwoSection) throw new Error('fixture 缺少服务器模块');
+    remoteAtTwoSection.title = '服务器分支';
+
+    await controller.rebaseLocalOntoRemote({
+      resumeId: draftScope.resumeId,
+      document: remoteAtTwo,
+      revision: '2',
+    });
+    expect(store.getState()).toMatchObject({ ackRevision: '2', isDirty: true });
+    await expect(repository.get(draftScope)).resolves.toMatchObject({
+      baseRevision: '2',
+      baseSnapshot: remoteAtTwo,
+      workingSnapshot: store.getState().document,
+      pendingEnvelope: null,
+    });
+
+    const secondEnvelope: PendingSaveEnvelope = {
+      ...firstEnvelope,
+      idempotencyKey: randomUUID(),
+      baseRevision: '2',
+      document: store.getState().document,
+    };
+    await controller.freezePending(secondEnvelope);
+    const remoteAtThree = structuredClone(remoteAtTwo);
+    const remoteAtThreeSection = remoteAtThree.sectionsById[sectionId];
+    if (!remoteAtThreeSection) throw new Error('fixture 缺少最终服务器模块');
+    remoteAtThreeSection.title = '最终服务器版本';
+    await controller.adoptRemote({
+      resumeId: draftScope.resumeId,
+      document: remoteAtThree,
+      revision: '3',
+    });
+    expect(store.getState()).toMatchObject({ ackRevision: '3', isDirty: false });
+    expect(store.getState().document.sectionsById[sectionId]?.title).toBe('最终服务器版本');
+    await expect(repository.get(draftScope)).resolves.toMatchObject({
+      baseRevision: '3',
+      baseSnapshot: remoteAtThree,
+      workingSnapshot: remoteAtThree,
+      localSeq: 0,
+      ackedSeq: 0,
+      pendingEnvelope: null,
+    });
+    await controller.dispose();
+  });
 });

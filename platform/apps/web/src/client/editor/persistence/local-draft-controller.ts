@@ -24,6 +24,18 @@ export interface LocalDraftStatus {
   updatedAt?: string;
 }
 
+export interface RemoteResumeSnapshot {
+  resumeId: string;
+  document: ResumeDocumentV1;
+  revision: string;
+}
+
+export interface LocalDraftConflictContext {
+  baseRevision: string;
+  baseSnapshot: ResumeDocumentV1;
+  pendingEnvelope: PendingSaveEnvelope;
+}
+
 export interface LocalDraftControllerOptions {
   repository: LocalDraftRepository;
   scope: LocalDraftScope;
@@ -202,6 +214,15 @@ export class LocalDraftController {
     return this.#pendingEnvelope;
   }
 
+  getConflictContext(): LocalDraftConflictContext | null {
+    if (!this.#pendingEnvelope) return null;
+    return {
+      baseRevision: this.#baseRevision,
+      baseSnapshot: this.#baseSnapshot,
+      pendingEnvelope: this.#pendingEnvelope,
+    };
+  }
+
   async freezePending(envelope: PendingSaveEnvelope): Promise<void> {
     const current = this.#pendingEnvelope;
     if (current && current.idempotencyKey !== envelope.idempotencyKey) {
@@ -267,6 +288,54 @@ export class LocalDraftController {
     } catch (error) {
       this.#reportError(error);
       return true;
+    }
+  }
+
+  async adoptRemote(snapshot: RemoteResumeSnapshot): Promise<void> {
+    if (snapshot.resumeId !== this.options.scope.resumeId) {
+      throw new Error('远端快照不属于当前简历');
+    }
+    await this.#discardConflictPending();
+    this.#baseRevision = snapshot.revision;
+    this.#baseSnapshot = snapshot.document;
+    this.options.store.getState().replaceFromRemote({
+      document: snapshot.document,
+      revision: snapshot.revision,
+    });
+    await this.flush();
+  }
+
+  async rebaseLocalOntoRemote(snapshot: RemoteResumeSnapshot): Promise<void> {
+    if (snapshot.resumeId !== this.options.scope.resumeId) {
+      throw new Error('远端快照不属于当前简历');
+    }
+    await this.#discardConflictPending();
+    this.#baseRevision = snapshot.revision;
+    this.#baseSnapshot = snapshot.document;
+    const state = this.options.store.getState();
+    this.options.store.getState().hydrateWorkingCopy({
+      document: state.document,
+      localSeq: state.localSeq,
+      ackedSeq: state.ackedSeq,
+      ackRevision: snapshot.revision,
+    });
+    await this.flush();
+  }
+
+  async #discardConflictPending(): Promise<void> {
+    const pending = this.#pendingEnvelope;
+    this.#pendingEnvelope = null;
+    if (!pending || this.options.initialError) return;
+    try {
+      await this.#enqueueWrite(async () => {
+        const discarded = await this.options.repository.discardPending(
+          this.options.scope,
+          pending.idempotencyKey,
+        );
+        if (!discarded) throw new LocalDraftUnavailableError('corrupt');
+      });
+    } catch (error) {
+      this.#reportError(error);
     }
   }
 

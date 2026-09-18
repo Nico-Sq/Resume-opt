@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +11,7 @@ import {
   type ResumeDocumentV1,
 } from '@resume/domain/resume';
 import { EditorWorkspace } from '../../apps/web/src/client/editor/editor-workspace';
+import type { ConflictSnapshotTransport } from '../../apps/web/src/client/editor/conflict';
 import type {
   AcknowledgePendingInput,
   LocalDraftRecord,
@@ -18,7 +19,7 @@ import type {
   LocalDraftScope,
   PendingSaveEnvelope,
 } from '../../apps/web/src/client/editor/persistence';
-import type { SaveTransport } from '../../apps/web/src/client/editor/saving';
+import { SaveTransportError, type SaveTransport } from '../../apps/web/src/client/editor/saving';
 import { createResumeEditorStore } from '../../apps/web/src/client/editor/store';
 
 class MemoryLocalDraftRepository implements LocalDraftRepository {
@@ -282,5 +283,78 @@ describe('editor workspace module management', () => {
     });
     expect(save).toHaveBeenCalledTimes(1);
     expect(store.getState()).toMatchObject({ isDirty: false, ackRevision: '2' });
+  });
+
+  it('warns before leaving while edits are not acknowledged', () => {
+    const { resume, store } = createFixture();
+    render(<EditorWorkspace initialResume={resume} store={store} />);
+    const sectionId = store.getState().document.moduleOrder[1];
+    if (!sectionId) throw new Error('fixture 缺少可编辑模块');
+    store.getState().dispatch({ type: 'set-section-title', sectionId, title: '未确认修改' });
+
+    const event = new Event('beforeunload', { cancelable: true });
+    expect(window.dispatchEvent(event)).toBe(false);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('shows a three-way conflict overlay and explicitly rebases the full local snapshot', async () => {
+    const user = userEvent.setup();
+    const { resume, store } = createFixture();
+    const repository = new MemoryLocalDraftRepository();
+    const scope = { userId: randomUUID(), resumeId: resume.id, tabId: randomUUID() };
+    const remoteDocument = structuredClone(resume.document);
+    const remoteSectionId = remoteDocument.moduleOrder[0];
+    if (!remoteSectionId) throw new Error('fixture 缺少远端模块');
+    const remoteSection = remoteDocument.sectionsById[remoteSectionId];
+    if (!remoteSection) throw new Error('fixture 缺少远端模块映射');
+    remoteSection.title = '服务器版本标题';
+    const conflictSnapshotTransport: ConflictSnapshotTransport = {
+      loadCurrent: vi.fn(() => {
+        return Promise.resolve({ resumeId: resume.id, document: remoteDocument, revision: '2' });
+      }),
+    };
+    const save = vi
+      .fn<SaveTransport['save']>()
+      .mockRejectedValueOnce(
+        new SaveTransportError('conflict', '版本冲突', { currentRevision: '2' }),
+      )
+      .mockImplementationOnce((envelope) =>
+        Promise.resolve({
+          resumeId: envelope.resumeId,
+          revision: '3',
+          versionId: randomUUID(),
+          acknowledgedSeq: envelope.clientSeq,
+          savedAt: '2026-09-18T08:00:00.000Z',
+          contentHash: 'd'.repeat(64),
+        }),
+      );
+    render(
+      <EditorWorkspace
+        conflictSnapshotTransport={conflictSnapshotTransport}
+        initialResume={resume}
+        localDraft={{ repository, scope, initialRecord: null }}
+        saveTransport={{ save }}
+        store={store}
+      />,
+    );
+    await waitFor(() => {
+      expect(repository.record).not.toBeNull();
+    });
+    const title = screen.getByRole('textbox', { name: '模块标题' });
+    fireEvent.focus(title);
+    fireEvent.change(title, { target: { value: '本地版本标题' } });
+    fireEvent.blur(title);
+
+    const dialog = await screen.findByRole('dialog', { name: '检测到服务器版本冲突' });
+    expect(within(dialog).getByText(/基于版本 1/)).toBeInstanceOf(HTMLElement);
+    expect(within(dialog).getByText('双方修改不同')).toBeInstanceOf(HTMLElement);
+    await user.click(within(dialog).getByRole('button', { name: '以服务器为基线重试本地修改' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('已保存 · 版本 3')).toBeInstanceOf(HTMLElement);
+    });
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save.mock.calls[1]?.[0]).toMatchObject({ baseRevision: '2' });
+    expect(store.getState().document.sectionsById[remoteSectionId]?.title).toBe('本地版本标题');
   });
 });

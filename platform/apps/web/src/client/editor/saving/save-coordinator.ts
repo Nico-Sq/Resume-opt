@@ -1,4 +1,9 @@
-import type { LocalDraftController, PendingSaveEnvelope } from '../persistence';
+import type {
+  LocalDraftConflictContext,
+  LocalDraftController,
+  PendingSaveEnvelope,
+  RemoteResumeSnapshot,
+} from '../persistence';
 import type { ResumeEditorStore } from '../store';
 import {
   SaveTransportError,
@@ -26,7 +31,14 @@ export type SaveCoordinatorStatus =
 
 export type SavePersistence = Pick<
   LocalDraftController,
-  'flush' | 'getPendingEnvelope' | 'freezePending' | 'acknowledgePending' | 'discardPending'
+  | 'flush'
+  | 'getPendingEnvelope'
+  | 'getConflictContext'
+  | 'freezePending'
+  | 'acknowledgePending'
+  | 'discardPending'
+  | 'adoptRemote'
+  | 'rebaseLocalOntoRemote'
 >;
 
 export interface SaveCoordinatorOptions {
@@ -333,6 +345,30 @@ export class SaveCoordinator {
     this.#validationFailedSeq = null;
     this.#retryCount = 0;
     await this.#requestSave();
+  }
+
+  getConflictContext(): LocalDraftConflictContext | null {
+    if (this.#terminalPhase !== 'conflict') return null;
+    return this.options.persistence.getConflictContext();
+  }
+
+  async adoptRemote(snapshot: RemoteResumeSnapshot): Promise<boolean> {
+    if (this.#disposed || this.#terminalPhase !== 'conflict') return false;
+    await this.options.persistence.adoptRemote(snapshot);
+    this.#terminalPhase = null;
+    this.#retryCount = 0;
+    this.options.onStatus({ phase: 'synced', revision: snapshot.revision });
+    return true;
+  }
+
+  async rebaseLocalOntoRemote(snapshot: RemoteResumeSnapshot): Promise<boolean> {
+    if (this.#disposed || this.#terminalPhase !== 'conflict') return false;
+    await this.options.persistence.rebaseLocalOntoRemote(snapshot);
+    this.#terminalPhase = null;
+    this.#retryCount = 0;
+    this.options.onStatus({ phase: 'dirty' });
+    await this.#requestSave();
+    return true;
   }
 
   dispose(): void {

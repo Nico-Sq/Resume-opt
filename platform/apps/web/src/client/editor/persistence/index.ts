@@ -10,9 +10,11 @@ export {
 } from './local-draft-repository';
 export {
   LocalDraftController,
+  type LocalDraftConflictContext,
   type LocalDraftControllerOptions,
   type LocalDraftPhase,
   type LocalDraftStatus,
+  type RemoteResumeSnapshot,
 } from './local-draft-controller';
 export {
   hasUnsyncedLocalChanges,

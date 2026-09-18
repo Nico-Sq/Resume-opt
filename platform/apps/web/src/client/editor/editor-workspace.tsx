@@ -46,6 +46,12 @@ import {
   type SaveCoordinatorStatus,
   type SaveTransport,
 } from './saving';
+import {
+  ConflictDialog,
+  ConflictSnapshotError,
+  HttpConflictSnapshotTransport,
+  type ConflictSnapshotTransport,
+} from './conflict';
 import styles from './editor-workspace.module.css';
 
 export interface EditorResume {
@@ -60,6 +66,7 @@ export interface EditorWorkspaceProps {
   store?: ResumeEditorStore;
   localDraft?: EditorLocalDraftContext;
   saveTransport?: SaveTransport;
+  conflictSnapshotTransport?: ConflictSnapshotTransport;
 }
 
 export interface EditorLocalDraftContext {
@@ -68,6 +75,16 @@ export interface EditorLocalDraftContext {
   initialRecord: LocalDraftRecord | null;
   initialError?: LocalDraftUnavailableError;
 }
+
+type ConflictViewState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | {
+      status: 'ready';
+      context: NonNullable<ReturnType<SaveCoordinator['getConflictContext']>>;
+      remote: Awaited<ReturnType<ConflictSnapshotTransport['loadCurrent']>>;
+    };
 
 const repeatableKinds = new Set<ContentSection['kind']>([
   'education',
@@ -135,6 +152,7 @@ export function EditorWorkspace({
   store: providedStore,
   localDraft,
   saveTransport,
+  conflictSnapshotTransport,
 }: EditorWorkspaceProps) {
   const [store] = useState(() => {
     const editorStore =
@@ -165,6 +183,12 @@ export function EditorWorkspace({
   );
   const localDraftControllerRef = useRef<LocalDraftController | null>(null);
   const saveCoordinatorRef = useRef<SaveCoordinator | null>(null);
+  const [resolvedConflictTransport] = useState(
+    () => conflictSnapshotTransport ?? new HttpConflictSnapshotTransport(),
+  );
+  const [conflictView, setConflictView] = useState<ConflictViewState>({ status: 'idle' });
+  const [conflictOpen, setConflictOpen] = useState(false);
+  const [conflictLoadAttempt, setConflictLoadAttempt] = useState(0);
 
   useEffect(() => {
     if (!localDraft) return;
@@ -214,6 +238,53 @@ export function EditorWorkspace({
     store,
   ]);
 
+  useEffect(() => {
+    const protectUnsyncedExit = (event: BeforeUnloadEvent) => {
+      const state = store.getState();
+      if (!state.isDirty && !localDraftControllerRef.current?.getPendingEnvelope()) return;
+      event.preventDefault();
+      Reflect.set(event, 'returnValue', '');
+    };
+    window.addEventListener('beforeunload', protectUnsyncedExit);
+    return () => {
+      window.removeEventListener('beforeunload', protectUnsyncedExit);
+    };
+  }, [store]);
+
+  useEffect(() => {
+    if (cloudSaveStatus?.phase !== 'conflict') return;
+    const context = saveCoordinatorRef.current?.getConflictContext();
+    const abortController = new AbortController();
+    queueMicrotask(() => {
+      if (abortController.signal.aborted) return;
+      setConflictOpen(true);
+      if (!context) {
+        setConflictView({ status: 'error', message: '本地冲突基线不可用，请先导出救援副本。' });
+        return;
+      }
+      setConflictView({ status: 'loading' });
+      void resolvedConflictTransport.loadCurrent(initialResume.id, abortController.signal).then(
+        (remote) => {
+          if (abortController.signal.aborted) return;
+          setConflictView({ status: 'ready', context, remote });
+        },
+        (error: unknown) => {
+          if (abortController.signal.aborted) return;
+          setConflictView({
+            status: 'error',
+            message:
+              error instanceof ConflictSnapshotError
+                ? error.message
+                : '服务器最新版本暂时无法读取，请稍后重试。',
+          });
+        },
+      );
+    });
+    return () => {
+      abortController.abort();
+    };
+  }, [cloudSaveStatus, conflictLoadAttempt, initialResume.id, resolvedConflictTransport]);
+
   const exportRescue = () => {
     const controller = localDraftControllerRef.current;
     if (!controller) return;
@@ -230,14 +301,44 @@ export function EditorWorkspace({
 
   const flushSave = () => saveCoordinatorRef.current?.flush() ?? Promise.resolve();
   const retrySave = () => saveCoordinatorRef.current?.retryNow() ?? Promise.resolve();
+  const adoptRemote = async (
+    remote: Awaited<ReturnType<ConflictSnapshotTransport['loadCurrent']>>,
+  ) => {
+    const adopted = await saveCoordinatorRef.current?.adoptRemote(remote);
+    if (adopted) {
+      setConflictOpen(false);
+      setConflictView({ status: 'idle' });
+    }
+  };
+  const rebaseLocal = async (
+    remote: Awaited<ReturnType<ConflictSnapshotTransport['loadCurrent']>>,
+  ) => {
+    const rebased = await saveCoordinatorRef.current?.rebaseLocalOntoRemote(remote);
+    if (rebased && saveCoordinatorRef.current?.getConflictContext() === null) {
+      setConflictOpen(false);
+    }
+  };
 
   return (
     <ResumeEditorStoreProvider store={store}>
       <EditorWorkspaceContent
         cloudSaveStatus={cloudSaveStatus}
+        conflictOpen={conflictOpen}
+        conflictView={conflictView}
         localDraftStatus={localDraftStatus}
+        onAdoptRemote={adoptRemote}
+        onCloseConflict={() => {
+          setConflictOpen(false);
+        }}
         onExportRescue={exportRescue}
         onFlushSave={flushSave}
+        onOpenConflict={() => {
+          setConflictOpen(true);
+        }}
+        onRebaseLocal={rebaseLocal}
+        onRetryConflictLoad={() => {
+          setConflictLoadAttempt((attempt) => attempt + 1);
+        }}
         onRetrySave={retrySave}
         resume={initialResume}
       />
@@ -248,16 +349,34 @@ export function EditorWorkspace({
 function EditorWorkspaceContent({
   resume,
   cloudSaveStatus,
+  conflictOpen,
+  conflictView,
   localDraftStatus,
+  onAdoptRemote,
+  onCloseConflict,
   onExportRescue,
   onFlushSave,
+  onOpenConflict,
+  onRebaseLocal,
+  onRetryConflictLoad,
   onRetrySave,
 }: {
   resume: EditorResume;
   cloudSaveStatus: SaveCoordinatorStatus | null;
+  conflictOpen: boolean;
+  conflictView: ConflictViewState;
   localDraftStatus: LocalDraftStatus | null;
+  onAdoptRemote: (
+    remote: Awaited<ReturnType<ConflictSnapshotTransport['loadCurrent']>>,
+  ) => Promise<void>;
+  onCloseConflict: () => void;
   onExportRescue: () => void;
   onFlushSave: () => Promise<void>;
+  onOpenConflict: () => void;
+  onRebaseLocal: (
+    remote: Awaited<ReturnType<ConflictSnapshotTransport['loadCurrent']>>,
+  ) => Promise<void>;
+  onRetryConflictLoad: () => void;
   onRetrySave: () => Promise<void>;
 }) {
   const resumeDocument = useResumeEditorStore((state) => state.document);
@@ -481,6 +600,11 @@ function EditorWorkspaceContent({
           {canRetry ? (
             <button className={styles.retryButton} onClick={() => void onRetrySave()} type="button">
               {cloudSaveStatus.phase === 'retry-wait' ? '立即重试' : '重新保存'}
+            </button>
+          ) : null}
+          {cloudSaveStatus?.phase === 'conflict' ? (
+            <button className={styles.conflictButton} onClick={onOpenConflict} type="button">
+              查看冲突
             </button>
           ) : null}
           {localDraftStatus?.phase === 'error' && isDirty ? (
@@ -805,6 +929,57 @@ function EditorWorkspaceContent({
           布
         </button>
       </nav>
+      {conflictOpen && conflictView.status === 'ready' ? (
+        <ConflictDialog
+          context={conflictView.context}
+          localDocument={resumeDocument}
+          onAdoptRemote={onAdoptRemote}
+          onClose={onCloseConflict}
+          onExportLocal={onExportRescue}
+          onRebaseLocal={onRebaseLocal}
+          remote={conflictView.remote}
+        />
+      ) : null}
+      {conflictOpen && (conflictView.status === 'loading' || conflictView.status === 'error') ? (
+        <div className={styles.dialogBackdrop}>
+          <section
+            aria-labelledby="conflict-load-title"
+            aria-modal="true"
+            className={styles.conflictDialog}
+            role="dialog"
+          >
+            <header className={styles.conflictHeader}>
+              <div>
+                <span className={styles.eyebrow}>保存已暂停</span>
+                <h2 id="conflict-load-title">
+                  {conflictView.status === 'loading' ? '正在读取服务器版本' : '无法读取服务器版本'}
+                </h2>
+              </div>
+              <button aria-label="关闭冲突处理" onClick={onCloseConflict} type="button">
+                ×
+              </button>
+            </header>
+            <p className={styles.conflictDescription}>
+              {conflictView.status === 'loading'
+                ? '正在准备基线、本地和服务器三方对比。'
+                : conflictView.message}
+            </p>
+            <footer className={styles.conflictActions}>
+              <button onClick={onExportRescue} type="button">
+                导出本地救援副本
+              </button>
+              {conflictView.status === 'error' ? (
+                <button onClick={onRetryConflictLoad} type="button">
+                  重新读取服务器版本
+                </button>
+              ) : null}
+              <button onClick={onCloseConflict} type="button">
+                暂时关闭
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

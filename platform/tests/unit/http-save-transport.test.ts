@@ -41,9 +41,9 @@ describe('HttpSaveTransport', () => {
       savedAt: '2026-09-18T08:00:01.000Z',
       contentHash: 'b'.repeat(64),
     };
-    let receiver: unknown;
+    let receiverMatched = false;
     vi.stubGlobal('fetch', function (this: unknown) {
-      receiver = this;
+      receiverMatched = this === globalThis;
       return Promise.resolve(
         jsonResponse(
           { data: receipt, traceId: randomUUID() },
@@ -54,7 +54,7 @@ describe('HttpSaveTransport', () => {
 
     try {
       await expect(new HttpSaveTransport().save(requestEnvelope)).resolves.toEqual(receipt);
-      expect(receiver).toBe(globalThis);
+      expect(receiverMatched).toBe(true);
     } finally {
       vi.unstubAllGlobals();
     }

@@ -91,7 +91,8 @@
   align-items: center;
   gap: 8px;
 }
-.rescueButton {
+.rescueButton,
+.conflictButton {
   height: 28px;
   border: 1px solid #4a3328;
   border-radius: 4px;
@@ -101,6 +102,11 @@
   font: inherit;
   font-size: 12px;
   padding: 0 9px;
+}
+.conflictButton {
+  border-color: #5b4826;
+  background: #1d1810;
+  color: #dec38d;
 }
 .retryButton {
   height: 28px;
@@ -119,6 +125,10 @@
 }
 .rescueButton:hover {
   border-color: #76523f;
+  color: #f5f5f5;
+}
+.conflictButton:hover {
+  border-color: #8a6d38;
   color: #f5f5f5;
 }
 .topbarActions {
@@ -494,6 +504,169 @@ button:focus-visible {
   clip: rect(0, 0, 0, 0);
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+.dialogBackdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 72%);
+  padding: 24px;
+}
+.conflictDialog {
+  width: min(620px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow-y: auto;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  background: #0d0d0d;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 45%);
+}
+.conflictHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #2a2a2a;
+  padding: 18px 18px 16px;
+}
+.conflictHeader h2,
+.conflictChanges h3,
+.conflictDescription,
+.conflictChanges p {
+  margin: 0;
+}
+.conflictHeader h2 {
+  margin-top: 2px;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 28px;
+}
+.conflictHeader button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #a3a3a3;
+  cursor: pointer;
+  font: inherit;
+  font-size: 20px;
+}
+.conflictHeader button:hover:not(:disabled) {
+  border-color: #2a2a2a;
+  background: #1a1a1a;
+  color: #f5f5f5;
+}
+.conflictDescription {
+  color: #a3a3a3;
+  padding: 16px 18px 0;
+  font-size: 13px;
+  line-height: 21px;
+}
+.conflictVersions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin: 16px 18px;
+  border: 1px solid #2a2a2a;
+  background: #2a2a2a;
+}
+.conflictVersions span {
+  background: #101010;
+  color: #a3a3a3;
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+}
+.conflictChanges {
+  padding: 0 18px;
+}
+.conflictChanges h3 {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+.conflictChanges ul {
+  display: grid;
+  max-height: 220px;
+  margin: 10px 0 0;
+  overflow-y: auto;
+  border-block: 1px solid #202020;
+  padding: 0;
+  list-style: none;
+}
+.conflictChanges li {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #202020;
+  color: #f5f5f5;
+  font-size: 13px;
+}
+.conflictChanges li:last-child {
+  border-bottom: 0;
+}
+.conflictChanges small {
+  color: #a3a3a3;
+  font-size: 11px;
+}
+.conflictChanges li[data-kind='diverged'] small {
+  color: #dec38d;
+}
+.conflictChanges p {
+  margin-top: 10px;
+  color: #a3a3a3;
+  font-size: 12px;
+}
+.conflictNotice {
+  margin: 16px 18px;
+  border-left: 2px solid #5b4826;
+  background: #15130f;
+  color: #a3a3a3;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 19px;
+}
+.conflictActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid #2a2a2a;
+  padding: 14px 18px 18px;
+}
+.conflictActions button {
+  min-height: 34px;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+  background: #151515;
+  color: #d4d4d4;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 0 12px;
+}
+.conflictActions button:hover:not(:disabled) {
+  border-color: #737373;
+  color: #f5f5f5;
+}
+.conflictActions button:disabled,
+.conflictHeader button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.conflictActions .conflictPrimaryAction {
+  border-color: #f5f5f5;
+  background: #f5f5f5;
+  color: #171717;
 }
 
 @media (max-width: 1280px) {

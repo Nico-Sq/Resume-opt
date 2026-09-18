@@ -57,6 +57,13 @@ export type FetchImplementation = (
 
 const defaultFetch: FetchImplementation = (input, init) => globalThis.fetch(input, init);
 
+function resolveEndpoint(relativeEndpoint: string): string | URL {
+  const locationValue: unknown = Reflect.get(globalThis, 'location');
+  if (typeof locationValue !== 'object' || locationValue === null) return relativeEndpoint;
+  const href: unknown = Reflect.get(locationValue, 'href');
+  return typeof href === 'string' ? new URL(relativeEndpoint, href) : relativeEndpoint;
+}
+
 function classifyHttpFailure(
   status: number,
   body: z.infer<typeof SaveErrorSchema> | null,
@@ -89,10 +96,7 @@ export class HttpSaveTransport implements SaveTransport {
     const relativeEndpoint = `/api/v1/resumes/${encodeURIComponent(envelope.resumeId)}/document`;
     let response: Response;
     try {
-      const endpoint =
-        typeof globalThis.location?.href === 'string'
-          ? new URL(relativeEndpoint, globalThis.location.href)
-          : relativeEndpoint;
+      const endpoint = resolveEndpoint(relativeEndpoint);
       response = await this.fetchImplementation(endpoint, {
         method: 'PUT',
         headers: {
