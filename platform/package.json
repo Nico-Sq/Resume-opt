@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "pnpm --filter @resume/web dev",
     "build": "pnpm --filter @resume/web build",
-    "lint": "eslint apps packages tests",
+    "lint": "eslint apps packages scripts tests",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit && pnpm -r --if-present typecheck",
     "boundaries:check": "depcruise --config .dependency-cruiser.cjs apps packages --output-type err",
@@ -24,8 +24,10 @@
     "test:migrations": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run tests/integration/migrations.test.ts",
     "test:unit": "vitest run --dir tests/unit",
     "test:integration": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --dir tests/integration",
-    "perf:baseline": "tsx scripts/performance/renderer-baseline.ts --environment local --budget performance-budget.json",
+    "perf:baseline": "tsx scripts/performance/renderer-baseline.ts --budget performance-budget.json",
     "ci:fast": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries:check && pnpm contracts:check && pnpm test:unit",
+    "ci:provision": "tsx scripts/ci/provision-ephemeral-postgres.ts",
+    "ci:full": "pnpm ci:fast && pnpm test:integration && pnpm test:save && pnpm perf:baseline -- --environment ci --output artifacts/ci/performance.json && pnpm ops:restore:rehearse -- --output artifacts/ci/restore.json && pnpm build",
     "test:save": "pnpm --filter @resume/save-reliability test",
     "test:save:unit": "pnpm --filter @resume/save-reliability test:unit",
     "test:save:pg": "pnpm --filter @resume/save-reliability test:pg"

@@ -1,0 +1,81 @@
+name: verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: platform
+    shell: bash
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      APP_ENV: test
+      AUTH_MODE: better-auth
+      PG_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+      PG_DEV_URL: postgresql://resume_opt_app:ci-app-password@127.0.0.1:5432/resume_opt_dev
+      PG_MIGRATION_URL: postgresql://resume_opt_migrator:ci-migrator-password@127.0.0.1:5432/resume_opt_dev
+      PG_TEST_URL: postgresql://resume_opt_test:ci-test-password@127.0.0.1:5432/resume_opt_test
+      DATABASE_POOL_MAX: "5"
+      NEXT_PUBLIC_APP_NAME: AI 简历平台
+    services:
+      postgres:
+        image: postgres:16.15-bookworm
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 20.19.0
+          package-manager-cache: false
+
+      - name: Activate pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.28.2 --activate
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare ephemeral test databases
+        run: |
+          touch .env.local
+          pnpm ci:provision
+
+      - name: Run complete V0.1 verification gate
+        run: pnpm ci:full
+
+      - name: Preserve sanitized verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: verification-evidence-${{ github.run_id }}
+          path: platform/artifacts/ci
+          if-no-files-found: warn
+          retention-days: 14

@@ -137,8 +137,8 @@ export function assertPerfEnvironment(environment: string): void {
   if (environment === 'production') {
     throw new Error('性能基准禁止指向 production');
   }
-  if (environment !== 'local') {
-    throw new Error(`renderer 基准仅允许 local，收到 ${environment}`);
+  if (!['local', 'ci'].includes(environment)) {
+    throw new Error(`renderer 基准仅允许 local 或 ci，收到 ${environment}`);
   }
 }
 

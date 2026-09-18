@@ -33,15 +33,18 @@ describe('V0.1 renderer performance baseline', () => {
     expect(() => percentile([], 0.95)).toThrow('至少需要一个样本');
   });
 
-  it('rejects production and unknown environments', () => {
+  it('accepts isolated local/CI runs and rejects production or unknown environments', () => {
     expect(() => {
       assertPerfEnvironment('production');
     }).toThrow('禁止指向 production');
     expect(() => {
       assertPerfEnvironment('staging');
-    }).toThrow('仅允许 local');
+    }).toThrow('仅允许 local 或 ci');
     expect(() => {
       assertPerfEnvironment('local');
+    }).not.toThrow();
+    expect(() => {
+      assertPerfEnvironment('ci');
     }).not.toThrow();
   });
 
