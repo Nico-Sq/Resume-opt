@@ -1,27 +1,11 @@
-import { randomUUID } from 'node:crypto';
-
 import { ResourceNotFoundError, StoredResumeInvalidError } from '@resume/application';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { getResumeForEditorUseCase } from '@/server/runtime';
+import { errorResponse, traceIdFrom } from './api-response';
 
 const ResumeIdSchema = z.uuid();
-
-function traceIdFrom(request: Request) {
-  const candidate = request.headers.get('x-request-id');
-  return candidate && z.uuid().safeParse(candidate).success ? candidate : randomUUID();
-}
-
-function errorResponse(
-  status: number,
-  code: string,
-  message: string,
-  traceId: string,
-  retryable = false,
-) {
-  return NextResponse.json({ code, message, traceId, retryable }, { status });
-}
 
 export async function respondWithResume(request: Request, resumeId: string) {
   const traceId = traceIdFrom(request);
@@ -47,6 +31,8 @@ export async function respondWithResume(request: Request, resumeId: string) {
     if (error instanceof StoredResumeInvalidError) {
       return errorResponse(500, error.code, error.message, traceId);
     }
-    return errorResponse(500, 'INTERNAL_ERROR', '服务暂时不可用', traceId, true);
+    return errorResponse(500, 'INTERNAL_ERROR', '服务暂时不可用', traceId, {
+      retryable: true,
+    });
   }
 }

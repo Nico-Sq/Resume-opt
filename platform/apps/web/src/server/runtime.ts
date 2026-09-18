@@ -1,4 +1,4 @@
-import { GetResumeForEditor } from '@resume/application';
+import { GetResumeForEditor, SaveResumeDocument } from '@resume/application';
 import { parseServerRuntimeConfig } from '@resume/config/server';
 import { FixedIdentityProvider } from '@resume/infrastructure/fixed-identity';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
@@ -28,6 +28,20 @@ export function getResumeForEditorUseCase() {
     throw new Error('V0.1 尚未配置真实认证适配器');
   }
   return new GetResumeForEditor(
+    new FixedIdentityProvider({
+      appEnvironment: config.APP_ENV,
+      userId: config.DEV_FIXED_USER_ID,
+    }),
+    new PostgresUserTransactionManager(getApplicationPool()),
+  );
+}
+
+export function getSaveResumeDocumentUseCase() {
+  const config = getServerRuntimeConfig();
+  if (config.AUTH_MODE !== 'fixed' || !config.DEV_FIXED_USER_ID) {
+    throw new Error('V0.1 尚未配置真实认证适配器');
+  }
+  return new SaveResumeDocument(
     new FixedIdentityProvider({
       appEnvironment: config.APP_ENV,
       userId: config.DEV_FIXED_USER_ID,

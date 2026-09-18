@@ -36,7 +36,10 @@ function transactionsFor(result: PersistedResume | null, observedUsers: string[]
     ): Promise<T> {
       observedUsers.push(currentUserId);
       return (await work({
-        resumes: { findActiveById: () => Promise.resolve(result) },
+        resumes: {
+          findActiveById: () => Promise.resolve(result),
+          saveDocument: () => Promise.reject(new Error('本测试不调用保存')),
+        },
       })) as T;
     },
   } satisfies UserTransactionManager;
