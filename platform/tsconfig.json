@@ -3,7 +3,11 @@
   "compilerOptions": { "jsx": "react-jsx", "noEmit": true },
   "include": [
     "tests/unit/**/*.ts",
+    "tests/unit/**/*.tsx",
+    "tests/**/*.d.ts",
     "tests/integration/**/*.ts",
+    "tests/integration/**/*.tsx",
+    "vitest.config.ts",
     "scripts/**/*.ts",
     "scripts/**/*.mjs"
   ]
