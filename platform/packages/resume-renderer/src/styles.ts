@@ -20,11 +20,17 @@ export const RESUME_RENDERER_CSS = `
   display: flex;
   flex-direction: column;
 }
-.resume-renderer .resume-header { margin-block-end: var(--resume-section-gap); }
-.resume-renderer .resume-name { margin: 0; color: var(--resume-heading-color); font-size: 20pt; line-height: 1.2; }
-.resume-renderer .resume-contact-list, .resume-renderer .resume-link-list { display: flex; flex-wrap: wrap; gap: 1mm 3mm; margin-block-start: var(--resume-paragraph-gap); }
-.resume-renderer .resume-section-heading { margin: var(--resume-section-gap) 0 var(--resume-paragraph-gap); color: var(--resume-heading-color); }
-.resume-renderer .resume-entry-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3mm; margin-block-end: var(--resume-paragraph-gap); }
+.resume-renderer .resume-header { margin-block-end: calc(var(--resume-section-gap) * .24); }
+.resume-renderer .resume-name { margin: 0; color: var(--resume-heading-color); font-size: 32pt; font-weight: 750; line-height: 1.08; letter-spacing: .02em; }
+.resume-renderer .resume-headline { margin: 1.8mm 0 0; color: #454545; font-size: 14pt; line-height: 1.4; }
+.resume-renderer .resume-contact-list, .resume-renderer .resume-link-list { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 1mm 5mm; margin-block-start: 3.2mm; color: #4a4a4a; vertical-align: middle; }
+.resume-renderer .resume-link-list { margin-left: 5mm; }
+.resume-renderer .resume-header .resume-link-list a { color: #4a4a4a; text-decoration: none; }
+.resume-renderer .resume-contact-list > span { display: inline-flex; align-items: center; gap: 1.5mm; }
+.resume-renderer .resume-contact-icon { flex: 0 0 auto; color: #555; }
+.resume-renderer .resume-section-heading { margin: var(--resume-section-gap) 0 var(--resume-paragraph-gap); border-bottom: .35mm solid #b8c0c7; color: var(--resume-heading-color); font-weight: 700; line-height: 1.55; }
+.resume-renderer .resume-entry-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0; margin-block-end: var(--resume-paragraph-gap); }
+.resume-renderer .resume-entry-heading > :not(:first-child)::before { content: "|"; margin: 0 2.5mm; color: #9a9a9a; font-weight: 400; }
 .resume-renderer .resume-entry-meta { color: #595959; }
 .resume-renderer .resume-paragraph, .resume-renderer .resume-bullet, .resume-renderer .resume-entry-links { margin: 0 0 var(--resume-paragraph-gap); overflow-wrap: anywhere; }
 .resume-renderer .resume-bullet { display: grid; grid-template-columns: 3mm minmax(0, 1fr); }

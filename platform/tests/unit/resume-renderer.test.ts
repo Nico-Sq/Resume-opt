@@ -247,6 +247,7 @@ describe('resume renderer flow and pagination', () => {
       kind: 'header',
       keepWithNext: false,
       name: '姓名',
+      headline: '',
       avatarUrl: null,
       contacts: [],
       links: [],

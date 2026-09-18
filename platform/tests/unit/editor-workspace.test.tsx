@@ -142,6 +142,7 @@ describe('editor workspace module management', () => {
     const user = userEvent.setup();
     const { resume, store } = createFixture();
     render(<EditorWorkspace initialResume={resume} store={store} />);
+    await user.click(screen.getByRole('button', { name: '模块排序' }));
     const education = sectionByKind(store.getState().document, 'education');
     const handle = screen.getByRole('button', {
       name: '拖动教育背景，可使用上下方向键排序',
@@ -174,6 +175,7 @@ describe('editor workspace module management', () => {
         (node) => node.textContent,
       ),
     ).toContain('教育背景');
+    await user.click(screen.getByRole('button', { name: '模块' }));
     const visibility = screen.getByRole('switch', { name: '隐藏教育背景' });
     await user.click(visibility);
 
@@ -207,7 +209,8 @@ describe('editor workspace module management', () => {
       sectionId: education.id,
       visible: false,
     });
-    const restore = screen.getByRole('button', { name: '恢复默认顺序与显示' });
+    await user.click(screen.getByRole('button', { name: '模块' }));
+    const restore = screen.getByRole('button', { name: '恢复默认' });
 
     await user.click(restore);
 
@@ -231,7 +234,7 @@ describe('editor workspace module management', () => {
     const collapseContent = screen.getAllByRole('button', { name: '收起内容面板' })[0];
     if (!collapseContent) throw new Error('缺少内容面板收起按钮');
     await user.click(collapseContent);
-    await user.click(screen.getByRole('button', { name: '收起模块布局设置' }));
+    await user.click(screen.getByRole('button', { name: '收起设置面板' }));
 
     expect(contentPanel.hidden).toBe(true);
     expect(settingsPanel.hidden).toBe(true);
@@ -243,6 +246,24 @@ describe('editor workspace module management', () => {
     expect(
       screen.getByRole('button', { name: '展开模块布局设置' }).getAttribute('aria-expanded'),
     ).toBe('false');
+  });
+
+  it('opens real share and export overlays from the prototype toolbar', async () => {
+    const user = userEvent.setup();
+    const { resume, store } = createFixture();
+    render(<EditorWorkspace initialResume={resume} store={store} />);
+
+    const toolbar = screen.getAllByRole('banner')[0];
+    if (!toolbar) throw new Error('缺少编辑器顶部工具栏');
+    await user.click(within(toolbar).getByRole('button', { name: /^分享$/u }));
+    const shareDialog = screen.getByRole('dialog', { name: '分享简历' });
+    expect(within(shareDialog).getByDisplayValue(/resume\.example/)).toBeInstanceOf(HTMLElement);
+    await user.click(within(shareDialog).getByRole('button', { name: '完成' }));
+
+    await user.click(screen.getByRole('button', { name: '导出 PDF' }));
+    const exportDialog = screen.getByRole('dialog', { name: '导出 PDF' });
+    expect(within(exportDialog).getByText('生成失败')).toBeInstanceOf(HTMLElement);
+    expect(within(exportDialog).getByText(/额度未扣减/)).toBeInstanceOf(HTMLElement);
   });
 
   it('flushes on field blur and reports cloud ACK separately from local backup', async () => {
@@ -279,7 +300,7 @@ describe('editor workspace module management', () => {
     await user.tab();
 
     await waitFor(() => {
-      expect(screen.getByText('已保存 · 版本 2')).toBeInstanceOf(HTMLElement);
+      expect(screen.getByText('已保存')).toBeInstanceOf(HTMLElement);
     });
     expect(save).toHaveBeenCalledTimes(1);
     expect(store.getState()).toMatchObject({ isDirty: false, ackRevision: '2' });
@@ -321,7 +342,7 @@ describe('editor workspace module management', () => {
     await user.tab();
 
     await waitFor(() => {
-      expect(screen.getByText('已保存 · 版本 2')).toBeInstanceOf(HTMLElement);
+      expect(screen.getByText('已保存')).toBeInstanceOf(HTMLElement);
     });
     expect(save).toHaveBeenCalledTimes(1);
     const savedEnvelope = save.mock.calls[0]?.[0];
@@ -405,6 +426,36 @@ describe('editor workspace module management', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
+  it('shows the prototype save-failure notice and allows deferring a retry', async () => {
+    const user = userEvent.setup();
+    const { resume, store } = createFixture();
+    const repository = new MemoryLocalDraftRepository();
+    const scope = { userId: randomUUID(), resumeId: resume.id, tabId: randomUUID() };
+    const save = vi
+      .fn<SaveTransport['save']>()
+      .mockRejectedValue(new SaveTransportError('fatal', '模拟保存失败'));
+    render(
+      <EditorWorkspace
+        initialResume={resume}
+        localDraft={{ repository, scope, initialRecord: null }}
+        saveTransport={{ save }}
+        store={store}
+      />,
+    );
+    await waitFor(() => {
+      expect(repository.record).not.toBeNull();
+    });
+    const title = screen.getByRole('textbox', { name: '模块标题' });
+    fireEvent.change(title, { target: { value: '触发失败通知' } });
+    fireEvent.blur(title);
+
+    const notice = await screen.findByRole('alert', { name: '保存状态通知' });
+    expect(within(notice).getByText('无法保存最新修改')).toBeInstanceOf(HTMLElement);
+    expect(within(notice).getByText(/暂时保存在本地/)).toBeInstanceOf(HTMLElement);
+    await user.click(within(notice).getByRole('button', { name: '稍后重试' }));
+    expect(screen.queryByRole('alert', { name: '保存状态通知' })).toBeNull();
+  });
+
   it('shows a three-way conflict overlay and explicitly rebases the full local snapshot', async () => {
     const user = userEvent.setup();
     const { resume, store } = createFixture();
@@ -459,7 +510,7 @@ describe('editor workspace module management', () => {
     await user.click(within(dialog).getByRole('button', { name: '以服务器为基线重试本地修改' }));
 
     await waitFor(() => {
-      expect(screen.getByText('已保存 · 版本 3')).toBeInstanceOf(HTMLElement);
+      expect(screen.getByText('已保存')).toBeInstanceOf(HTMLElement);
     });
     expect(save).toHaveBeenCalledTimes(2);
     expect(save.mock.calls[1]?.[0]).toMatchObject({ baseRevision: '2' });

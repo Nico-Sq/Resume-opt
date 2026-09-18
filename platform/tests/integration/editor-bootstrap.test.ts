@@ -74,6 +74,15 @@ describe('fixed editor bootstrap', () => {
     expect(result.id).toBe(seed.resumeId);
     expect(result.revision).toBe('1');
     expect(result.document.schemaVersion).toBe(1);
+    expect(result.title).toBe('张三的简历');
+    expect(
+      Object.values(result.document.sectionsById).find((section) => section.kind === 'basic')
+        ?.entries[0],
+    ).toMatchObject({ name: '张三' });
+    expect(
+      Object.values(result.document.sectionsById).find((section) => section.kind === 'intent')
+        ?.entries[0],
+    ).toMatchObject({ targetRole: '前端开发工程师' });
   });
 
   it('returns the same 404 class for another owner and a missing resource', async () => {

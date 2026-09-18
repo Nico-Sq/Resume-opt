@@ -92,10 +92,12 @@ function UrlField({
   path,
   value,
   onFlushSave,
+  label = '链接地址',
 }: EntryTarget & {
   path: ReadonlyArray<string | number>;
   value: string;
   onFlushSave: () => Promise<void>;
+  label?: string;
 }) {
   const dispatch = useResumeEditorStore((state) => state.dispatch);
   const beginHistoryGroup = useResumeEditorStore((state) => state.beginHistoryGroup);
@@ -114,7 +116,7 @@ function UrlField({
 
   return (
     <label htmlFor={inputId}>
-      <span>链接地址</span>
+      <span>{label}</span>
       <input
         aria-describedby={error ? errorId : undefined}
         aria-invalid={error ? true : undefined}
@@ -537,9 +539,22 @@ function BasicEditor({
   section: Extract<ContentSection, { kind: 'basic' }>;
   onFlushSave: () => Promise<void>;
 }) {
+  const document = useResumeEditorStore((state) => state.document);
   const entry = section.entries[0];
   if (!entry) return <p className={styles.emptyState}>基本信息数据缺失。</p>;
   const target = { sectionId: section.id, entryId: entry.id };
+  const intent = Object.values(document.sectionsById).find(
+    (candidate): candidate is Extract<ContentSection, { kind: 'intent' }> =>
+      candidate.kind === 'intent',
+  );
+  const intentEntry = intent?.entries[0];
+  const summary = Object.values(document.sectionsById).find(
+    (candidate): candidate is Extract<ContentSection, { kind: 'summary' }> =>
+      candidate.kind === 'summary',
+  );
+  const summaryEntry = summary?.entries[0];
+  const summaryBlock = summaryEntry?.blocks[0];
+  const website = entry.links[0];
   return (
     <div className={styles.fieldGrid}>
       <TextField
@@ -549,32 +564,60 @@ function BasicEditor({
         path={['name']}
         value={entry.name}
       />
-      {(
-        [
-          ['phone', '电话', 'tel'],
-          ['email', '邮箱', 'email'],
-          ['city', '所在城市', 'text'],
-        ] as const
-      ).map(([field, label, type]) => (
-        <div className={styles.contactField} key={field}>
-          <TextField
-            {...target}
-            label={label}
-            onFlushSave={onFlushSave}
-            path={[field, 'value']}
-            type={type}
-            value={entry[field].value}
-          />
-          <ToggleField
-            {...target}
-            checked={entry[field].visible}
-            label={`显示${label}`}
-            onFlushSave={onFlushSave}
-            path={[field, 'visible']}
-          />
-        </div>
-      ))}
-      <LinkListEditor {...target} links={entry.links} onFlushSave={onFlushSave} />
+      {intent && intentEntry ? (
+        <TextField
+          entryId={intentEntry.id}
+          label="求职岗位"
+          onFlushSave={onFlushSave}
+          path={['targetRole']}
+          sectionId={intent.id}
+          value={intentEntry.targetRole}
+        />
+      ) : null}
+      <TextField
+        {...target}
+        label="手机号"
+        onFlushSave={onFlushSave}
+        path={['phone', 'value']}
+        type="tel"
+        value={entry.phone.value}
+      />
+      <TextField
+        {...target}
+        label="邮箱"
+        onFlushSave={onFlushSave}
+        path={['email', 'value']}
+        type="email"
+        value={entry.email.value}
+      />
+      <TextField
+        {...target}
+        label="所在城市"
+        onFlushSave={onFlushSave}
+        path={['city', 'value']}
+        value={entry.city.value}
+      />
+      {website ? (
+        <UrlField
+          {...target}
+          label="个人网站"
+          onFlushSave={onFlushSave}
+          path={['links', 0, 'url']}
+          value={website.url}
+        />
+      ) : null}
+      {summary && summaryEntry && summaryBlock ? (
+        <TextField
+          entryId={summaryEntry.id}
+          label="个人简介"
+          maxLength={4_000}
+          multiline
+          onFlushSave={onFlushSave}
+          path={['blocks', 0, 'text']}
+          sectionId={summary.id}
+          value={summaryBlock.text}
+        />
+      ) : null}
     </div>
   );
 }

@@ -21,6 +21,7 @@
     "db:migrate": "node --env-file=.env.local --import tsx scripts/migrate.ts --database=dev",
     "db:migrate:test": "node --env-file=.env.local --import tsx scripts/migrate.ts --database=test",
     "db:seed:dev": "node --env-file=.env.local --import tsx scripts/seed-development.ts",
+    "db:reset:prototype": "node --env-file=.env.local --import tsx scripts/reset-development-resume.ts",
     "ops:restore:rehearse": "node --env-file=.env.local --import tsx scripts/ops/rehearse-logical-restore.ts --environment=test",
     "ops:restore:native": "node --env-file=.env.local --import tsx scripts/ops/rehearse-native-restore.ts --environment=test",
     "test:migrations": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run tests/integration/migrations.test.ts",

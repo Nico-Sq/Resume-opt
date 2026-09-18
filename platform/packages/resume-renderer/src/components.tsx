@@ -11,6 +11,55 @@ interface BlockViewProps {
   measurement?: boolean;
 }
 
+function ContactIcon({ label }: { label: string }): ReactElement {
+  const common = {
+    'aria-hidden': true,
+    className: 'resume-contact-icon',
+    fill: 'none',
+    height: 14,
+    viewBox: '0 0 24 24',
+    width: 14,
+  } as const;
+  if (label === '电话') {
+    return (
+      <svg {...common}>
+        <path
+          d="M6.6 3.8 9 8.1 6.9 9.8c1.4 3 3.6 5.2 6.6 6.6l1.7-2.1 4.3 2.4-.8 3.1c-.2.7-.8 1.2-1.5 1.2C9.4 20.6 3.4 14.6 3 6.8c0-.7.5-1.3 1.2-1.5l2.4-.7Z"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.7"
+        />
+      </svg>
+    );
+  }
+  if (label === '邮箱') {
+    return (
+      <svg {...common}>
+        <rect height="14" rx="1.5" stroke="currentColor" strokeWidth="1.7" width="18" x="3" y="5" />
+        <path
+          d="m4 7 8 6 8-6"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.7"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <path
+        d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+      <circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
 function linksView(links: ReadonlyArray<{ label: string; url: string }>): ReactNode {
   return links.map((link, index) => (
     <a href={link.url} key={`${link.url}-${String(index)}`} rel="noreferrer">
@@ -35,11 +84,16 @@ function BlockView({ block, placement, measurement = false }: BlockViewProps): R
             <img alt="" className="resume-avatar" src={block.avatarUrl} />
           ) : null}
           {block.name ? <h1 className="resume-name">{block.name}</h1> : null}
+          {block.headline ? <p className="resume-headline">{block.headline}</p> : null}
           {block.contacts.length > 0 ? (
             <div className="resume-contact-list">
               {block.contacts.map((contact, index) => (
-                <span key={`${contact.label}-${String(index)}`}>
-                  {contact.label}：{contact.value}
+                <span
+                  aria-label={`${contact.label}：${contact.value}`}
+                  key={`${contact.label}-${String(index)}`}
+                >
+                  <ContactIcon label={contact.label} />
+                  {contact.value}
                 </span>
               ))}
             </div>
@@ -67,10 +121,8 @@ function BlockView({ block, placement, measurement = false }: BlockViewProps): R
     case 'entry-heading':
       return (
         <div className="resume-entry-heading" {...common}>
-          <div>
-            {block.heading ? <strong>{block.heading}</strong> : null}
-            {block.subheading ? <div className="resume-entry-meta">{block.subheading}</div> : null}
-          </div>
+          {block.heading ? <strong>{block.heading}</strong> : null}
+          {block.subheading ? <span className="resume-entry-meta">{block.subheading}</span> : null}
           {block.periodLabel ? <time>{block.periodLabel}</time> : null}
         </div>
       );

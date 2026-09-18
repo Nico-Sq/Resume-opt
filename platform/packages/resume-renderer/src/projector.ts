@@ -39,6 +39,7 @@ export interface ResumeRenderModel {
   template: { id: string; version: string };
   locale: string;
   name: string;
+  headline: string;
   avatarUrl: string | null;
   contacts: RenderContact[];
   links: RenderLink[];
@@ -304,6 +305,11 @@ export function createResumeRenderModel(input: RendererInput): ResumeRenderModel
       sectionValue.kind === 'basic' && sectionValue.visible,
   );
   const basicEntry = basic?.entries[0];
+  const intent = Object.values(document.sectionsById).find(
+    (sectionValue): sectionValue is Extract<ContentSection, { kind: 'intent' }> =>
+      sectionValue.kind === 'intent' && sectionValue.visible,
+  );
+  const intentEntry = intent?.entries[0];
   const contacts: RenderContact[] = basicEntry
     ? [
         { label: '电话', ...basicEntry.phone },
@@ -317,7 +323,9 @@ export function createResumeRenderModel(input: RendererInput): ResumeRenderModel
     : [];
   const sections = document.moduleOrder.flatMap((sectionId) => {
     const sectionValue = document.sectionsById[sectionId];
-    if (!sectionValue?.visible || sectionValue.kind === 'basic') return [];
+    if (!sectionValue?.visible || sectionValue.kind === 'basic' || sectionValue.kind === 'intent') {
+      return [];
+    }
     const projected = renderSection(document, sectionValue, input.renderPolicy);
     return projected ? [projected] : [];
   });
@@ -328,6 +336,7 @@ export function createResumeRenderModel(input: RendererInput): ResumeRenderModel
     template: { id: input.templateManifest.id, version: input.templateManifest.version },
     locale: document.locale,
     name: basicEntry ? textIfPresent(basicEntry.name) : '',
+    headline: intentEntry ? textIfPresent(intentEntry.targetRole) : '',
     avatarUrl: avatarUrl(input, basic),
     contacts,
     links: basicEntry ? visibleLinks(basicEntry.links, input.renderPolicy) : [],

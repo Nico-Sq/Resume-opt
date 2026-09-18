@@ -53,6 +53,7 @@ import {
   type ConflictSnapshotTransport,
 } from './conflict';
 import { SectionFieldsEditor } from './section-fields-editor';
+import { EditorIcon, type EditorIconName } from './editor-icons';
 import styles from './editor-workspace.module.css';
 
 export interface EditorResume {
@@ -98,20 +99,22 @@ const repeatableKinds = new Set<ContentSection['kind']>([
   'custom',
 ]);
 
-const moduleGlyph: Record<ContentSection['kind'], string> = {
-  basic: '人',
-  intent: '向',
-  summary: '概',
-  education: '学',
-  work: '职',
-  project: '项',
-  internship: '实',
-  campus: '校',
-  skillsCertificates: '技',
-  awards: '奖',
-  selfEvaluation: '评',
-  custom: '自',
+const moduleGlyph: Record<ContentSection['kind'], EditorIconName> = {
+  basic: 'basic',
+  intent: 'intent',
+  summary: 'summary',
+  education: 'education',
+  work: 'work',
+  project: 'project',
+  internship: 'internship',
+  campus: 'campus',
+  skillsCertificates: 'skills',
+  awards: 'award',
+  selfEvaluation: 'self-evaluation',
+  custom: 'summary',
 };
+
+type RightPanelMode = 'style' | 'modules' | 'sorting';
 
 function estimateBlockHeight(block: RenderFlowBlock): number {
   switch (block.kind) {
@@ -387,11 +390,14 @@ function EditorWorkspaceContent({
   const canUndo = useResumeEditorStore((state) => state.canUndo);
   const canRedo = useResumeEditorStore((state) => state.canRedo);
   const isDirty = useResumeEditorStore((state) => state.isDirty);
-  const ackRevision = useResumeEditorStore((state) => state.ackRevision);
   const beginHistoryGroup = useResumeEditorStore((state) => state.beginHistoryGroup);
   const endHistoryGroup = useResumeEditorStore((state) => state.endHistoryGroup);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('style');
+  const [dismissedSavePhase, setDismissedSavePhase] = useState<string | null>(null);
+  const [overlay, setOverlay] = useState<'share' | 'export' | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState(resumeDocument.moduleOrder[0] ?? '');
   const [announcement, setAnnouncement] = useState('');
   const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
@@ -546,20 +552,16 @@ function EditorWorkspaceContent({
   };
 
   const saveLabel = (() => {
-    if (!cloudSaveStatus) return isDirty ? '有未保存修改' : `版本 ${ackRevision}`;
+    if (!cloudSaveStatus) return isDirty ? '有未保存修改' : '已保存';
     switch (cloudSaveStatus.phase) {
       case 'synced':
-        return localDraftStatus?.phase === 'error'
-          ? `云端已保存 · 本地备份不可用 · 版本 ${cloudSaveStatus.revision}`
-          : `已保存 · 版本 ${cloudSaveStatus.revision}`;
+        return localDraftStatus?.phase === 'error' ? '云端已保存 · 本地备份不可用' : '已保存';
       case 'saving':
         return '正在保存';
       case 'retry-wait':
-        return `保存中断 · 正在准备第 ${String(cloudSaveStatus.attempt)} 次重试`;
+        return '正在重新保存…';
       case 'failed':
-        return localDraftStatus?.phase === 'error'
-          ? '保存失败 · 请导出救援副本'
-          : '保存失败 · 已保留本地草稿';
+        return '保存失败';
       case 'conflict':
         return '版本冲突 · 已暂停自动保存';
       case 'auth-paused':
@@ -590,17 +592,25 @@ function EditorWorkspaceContent({
       )}
     >
       <header className={styles.topbar}>
-        <div className={styles.fileIdentity}>
-          <span className={styles.eyebrow}>固定测试简历</span>
-          <strong>{resume.title}</strong>
+        <div className={styles.topbarStart}>
+          <button className={styles.backButton} title="返回工作台" type="button">
+            <EditorIcon name="arrow-left" size={20} />
+            <span>返回工作台</span>
+          </button>
+          <span aria-hidden="true" className={styles.topbarDivider} />
+          <button className={styles.titleButton} title="重命名简历" type="button">
+            <strong>{resume.title}</strong>
+            <EditorIcon name="pencil" size={17} />
+          </button>
         </div>
-        <div className={styles.saveStateGroup}>
+        <div className={styles.saveStateGroup} data-phase={cloudSaveStatus?.phase}>
+          <EditorIcon name="check-circle" size={20} />
           <span aria-live="polite" className={styles.saveState} role="status">
             {saveLabel}
           </span>
           {canRetry ? (
             <button className={styles.retryButton} onClick={() => void onRetrySave()} type="button">
-              {cloudSaveStatus.phase === 'retry-wait' ? '立即重试' : '重新保存'}
+              {cloudSaveStatus.phase === 'retry-wait' ? '重试' : '重新保存'}
             </button>
           ) : null}
           {cloudSaveStatus?.phase === 'conflict' ? (
@@ -622,7 +632,8 @@ function EditorWorkspaceContent({
             title="撤销"
             type="button"
           >
-            ↶
+            <EditorIcon name="undo" size={19} />
+            <span>撤销</span>
           </button>
           <button
             aria-label="重做"
@@ -631,24 +642,34 @@ function EditorWorkspaceContent({
             title="重做"
             type="button"
           >
-            ↷
+            <EditorIcon name="redo" size={19} />
+            <span>重做</span>
+          </button>
+          <button
+            aria-label="分享"
+            onClick={() => {
+              setLinkCopied(false);
+              setOverlay('share');
+            }}
+            title="分享"
+            type="button"
+          >
+            <EditorIcon name="share" size={19} />
+            <span>分享</span>
+          </button>
+          <button
+            className={styles.exportButton}
+            onClick={() => {
+              setOverlay('export');
+            }}
+            type="button"
+          >
+            导出 PDF
           </button>
         </div>
       </header>
 
       <nav aria-label="简历模块" className={styles.leftRail}>
-        <button
-          aria-expanded={leftOpen}
-          aria-label={leftOpen ? '收起内容面板' : '展开内容面板'}
-          className={styles.panelToggle}
-          onClick={() => {
-            setLeftOpen((value) => !value);
-          }}
-          title={leftOpen ? '收起内容面板' : '展开内容面板'}
-          type="button"
-        >
-          {leftOpen ? '‹' : '›'}
-        </button>
         <div className={styles.railItems}>
           {orderedSections.map((sectionValue) => (
             <button
@@ -664,17 +685,35 @@ function EditorWorkspaceContent({
               title={sectionValue.title}
               type="button"
             >
-              {moduleGlyph[sectionValue.kind]}
+              <EditorIcon name={moduleGlyph[sectionValue.kind]} size={22} />
             </button>
           ))}
         </div>
+        {!leftOpen ? (
+          <button
+            aria-expanded="false"
+            aria-label="展开内容面板"
+            className={styles.railEdgeToggle}
+            onClick={() => {
+              setLeftOpen(true);
+            }}
+            title="展开内容编辑"
+            type="button"
+          >
+            <EditorIcon name="chevron-right" size={16} />
+          </button>
+        ) : null}
       </nav>
 
       <aside aria-label="内容编辑" className={styles.leftPanel} hidden={!leftOpen}>
         <div className={styles.panelHeader}>
           <div>
-            <span className={styles.eyebrow}>内容</span>
             <h1>{selectedSection?.title ?? '简历内容'}</h1>
+            <p>
+              {selectedSection?.kind === 'basic'
+                ? '完善你的联系方式与个人介绍'
+                : '编辑模块内容，预览将实时更新'}
+            </p>
           </div>
           <button
             aria-label="收起内容面板"
@@ -684,12 +723,12 @@ function EditorWorkspaceContent({
             }}
             type="button"
           >
-            ‹
+            <EditorIcon name="chevron-left" size={16} />
           </button>
         </div>
         {selectedSection ? (
           <section className={styles.sectionEditor}>
-            <label>
+            <label className={styles.moduleTitleField}>
               <span>模块标题</span>
               <input
                 onBlur={() => {
@@ -709,10 +748,20 @@ function EditorWorkspaceContent({
                 value={selectedSection.title}
               />
             </label>
-            <div className={styles.sectionSummary}>
-              <span>{selectedSection.entries.length} 条内容</span>
-              <span>{selectedSection.visible ? '在预览中显示' : '当前已隐藏'}</span>
-            </div>
+            {selectedSection.kind === 'basic' ? (
+              <div className={styles.avatarRow}>
+                <div aria-hidden="true" className={styles.avatarPlaceholder}>
+                  <EditorIcon name="basic" size={44} />
+                </div>
+                <strong>上传头像</strong>
+                <button type="button">选择图片</button>
+              </div>
+            ) : (
+              <div className={styles.sectionSummary}>
+                <span>{selectedSection.entries.length} 条内容</span>
+                <span>{selectedSection.visible ? '在预览中显示' : '当前已隐藏'}</span>
+              </div>
+            )}
             {repeatableKinds.has(selectedSection.kind) ? (
               <button
                 className={styles.secondaryButton}
@@ -728,18 +777,22 @@ function EditorWorkspaceContent({
         <div className={styles.leftPanelFooter}>
           <button
             onClick={() => {
+              setRightPanelMode('modules');
               setRightOpen(true);
             }}
             type="button"
           >
+            <EditorIcon name="plus" size={20} />
             新增模块
           </button>
           <button
             onClick={() => {
+              setRightPanelMode('sorting');
               setRightOpen(true);
             }}
             type="button"
           >
+            <EditorIcon name="sort" size={20} />
             模块排序
           </button>
         </div>
@@ -798,9 +851,34 @@ function EditorWorkspaceContent({
       <aside aria-label="布局设置" className={styles.rightPanel} hidden={!rightOpen}>
         <div className={styles.panelHeader}>
           <div>
-            <span className={styles.eyebrow}>设置</span>
-            <h2>模块布局</h2>
+            <h2>
+              {rightPanelMode === 'style'
+                ? '模板与样式'
+                : rightPanelMode === 'modules'
+                  ? '模块管理'
+                  : '布局'}
+            </h2>
+            <p>
+              {rightPanelMode === 'style'
+                ? '调整简历的整体视觉与页面设置'
+                : rightPanelMode === 'modules'
+                  ? '控制简历模块的显示状态'
+                  : '拖动模块调整简历中的显示顺序'}
+            </p>
           </div>
+          {rightPanelMode !== 'style' ? (
+            <button
+              className={styles.textAction}
+              onClick={restoreDefault}
+              ref={(node) => {
+                if (node) actionRefs.current.set('layout:restore', node);
+                else actionRefs.current.delete('layout:restore');
+              }}
+              type="button"
+            >
+              {rightPanelMode === 'modules' ? '恢复默认' : '恢复默认顺序'}
+            </button>
+          ) : null}
           <button
             aria-label="收起设置面板"
             className={styles.edgeToggle}
@@ -809,104 +887,270 @@ function EditorWorkspaceContent({
             }}
             type="button"
           >
-            ›
+            <EditorIcon name="chevron-right" size={16} />
           </button>
         </div>
-        <p className={styles.helperText}>
-          拖动排序，或聚焦拖动按钮后使用上下方向键。隐藏不会删除内容。
-        </p>
-        <ol aria-label="模块顺序" className={styles.moduleList}>
-          {orderedSections.map((sectionValue, index) => (
-            <li
-              className={styles.moduleRow}
-              data-section-id={sectionValue.id}
-              key={sectionValue.id}
-              onDragOver={(event) => {
-                event.preventDefault();
-              }}
-              onDrop={(event) => {
-                handleDrop(event, index);
-              }}
-            >
-              <button
-                aria-label={`拖动${sectionValue.title}，可使用上下方向键排序`}
-                className={styles.dragHandle}
-                draggable
-                onDragEnd={() => {
-                  setDraggedSectionId(null);
-                }}
-                onDragStart={(event) => {
-                  setDraggedSectionId(sectionValue.id);
-                  event.dataTransfer.effectAllowed = 'move';
-                  event.dataTransfer.setData('text/plain', sectionValue.id);
-                }}
-                onKeyDown={(event) => {
-                  handleSortKey(event, sectionValue.id, index);
-                }}
-                ref={(node) => {
-                  if (node) actionRefs.current.set(`${sectionValue.id}:drag`, node);
-                  else actionRefs.current.delete(`${sectionValue.id}:drag`);
-                }}
-                type="button"
-              >
-                ⠿
-              </button>
-              <button
-                className={styles.moduleName}
-                onClick={() => {
-                  setSelectedSectionId(sectionValue.id);
-                  setLeftOpen(true);
-                }}
-                type="button"
-              >
-                <span>{sectionValue.title}</span>
-                <small>{sectionValue.entries.length} 条</small>
-              </button>
-              <button
-                aria-checked={sectionValue.visible}
-                aria-label={`${sectionValue.visible ? '隐藏' : '显示'}${sectionValue.title}`}
-                className={styles.visibilitySwitch}
-                onClick={() => {
-                  toggleVisibility(sectionValue);
-                }}
-                ref={(node) => {
-                  if (node) actionRefs.current.set(`${sectionValue.id}:visibility`, node);
-                  else actionRefs.current.delete(`${sectionValue.id}:visibility`);
-                }}
-                role="switch"
-                type="button"
-              >
-                <span />
-              </button>
-            </li>
-          ))}
-        </ol>
-        <div className={styles.customModuleForm}>
-          <label htmlFor="custom-module-title">新增自定义模块</label>
-          <div>
-            <input
-              id="custom-module-title"
-              maxLength={100}
-              onChange={(event) => {
-                setCustomTitle(event.target.value);
-              }}
-              placeholder="例如：开源贡献"
-              value={customTitle}
-            />
-            <button disabled={!customTitle.trim()} onClick={addCustomSection} type="button">
-              新增
-            </button>
+
+        {rightPanelMode === 'style' ? (
+          <div className={styles.stylePanel}>
+            <div className={styles.templateChoice}>
+              <div className={styles.templateThumbnail}>
+                <div>
+                  <strong>张三</strong>
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </div>
+              <strong>简洁单栏</strong>
+            </div>
+            <fieldset className={styles.colorFieldset}>
+              <legend>主题颜色</legend>
+              {['#171717', '#343434', '#8b8b8b', '#34495e', '#d9b29e'].map((color, index) => (
+                <button
+                  aria-label={`主题颜色 ${String(index + 1)}`}
+                  className={index === 0 ? styles.colorSelected : undefined}
+                  key={color}
+                  style={{ background: color }}
+                  type="button"
+                />
+              ))}
+            </fieldset>
+            <div className={styles.settingRows}>
+              <label>
+                <span>字体选择</span>
+                <select defaultValue="noto">
+                  <option value="noto">Noto Sans SC</option>
+                </select>
+              </label>
+              <label>
+                <span>字重选择</span>
+                <select defaultValue="400">
+                  <option value="400">常规 400</option>
+                  <option value="600">中等 600</option>
+                </select>
+              </label>
+              <label>
+                <span>页面格式</span>
+                <select defaultValue="a4">
+                  <option value="a4">A4</option>
+                </select>
+              </label>
+            </div>
+            <fieldset className={styles.marginFieldset}>
+              <legend>页面边距</legend>
+              <label>
+                <span>上</span>
+                <input defaultValue="18" />
+                <b>mm</b>
+              </label>
+              <label>
+                <span>下</span>
+                <input defaultValue="18" />
+                <b>mm</b>
+              </label>
+              <label>
+                <span>左</span>
+                <input defaultValue="20" />
+                <b>mm</b>
+              </label>
+              <label>
+                <span>右</span>
+                <input defaultValue="20" />
+                <b>mm</b>
+              </label>
+            </fieldset>
+            <div className={styles.settingToggles}>
+              {['显示头像', '显示联系方式', '显示分隔线'].map((label, index) => (
+                <div key={label}>
+                  <span>{label}</span>
+                  <button
+                    aria-checked={index > 0}
+                    className={styles.visibilitySwitch}
+                    role="switch"
+                    type="button"
+                  >
+                    <span />
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-        <button
-          className={styles.restoreButton}
-          onClick={restoreDefault}
-          ref={(node) => {
-            if (node) actionRefs.current.set('layout:restore', node);
-            else actionRefs.current.delete('layout:restore');
-          }}
-          type="button"
-        >
+        ) : null}
+
+        {rightPanelMode === 'modules' ? (
+          <>
+            <ol aria-label="模块显示状态" className={styles.moduleManageList}>
+              {orderedSections.map((sectionValue) => (
+                <li className={styles.moduleManageRow} key={sectionValue.id}>
+                  <EditorIcon name={moduleGlyph[sectionValue.kind]} size={23} />
+                  <button
+                    className={styles.moduleName}
+                    onClick={() => {
+                      setSelectedSectionId(sectionValue.id);
+                      setLeftOpen(true);
+                    }}
+                    type="button"
+                  >
+                    <span>{sectionValue.title}</span>
+                  </button>
+                  <button
+                    aria-checked={sectionValue.visible}
+                    aria-label={`${sectionValue.visible ? '隐藏' : '显示'}${sectionValue.title}`}
+                    className={styles.visibilitySwitch}
+                    onClick={() => {
+                      toggleVisibility(sectionValue);
+                    }}
+                    ref={(node) => {
+                      if (node) actionRefs.current.set(`${sectionValue.id}:visibility`, node);
+                      else actionRefs.current.delete(`${sectionValue.id}:visibility`);
+                    }}
+                    role="switch"
+                    type="button"
+                  >
+                    <span />
+                  </button>
+                  <button
+                    aria-label={`${sectionValue.title}更多操作`}
+                    className={styles.moreButton}
+                    type="button"
+                  >
+                    <EditorIcon name="more" size={19} />
+                  </button>
+                </li>
+              ))}
+            </ol>
+            <div className={styles.modulePanelFooter}>
+              <div className={styles.customModuleForm}>
+                <label className={styles.srOnly} htmlFor="custom-module-title">
+                  新增自定义模块
+                </label>
+                <input
+                  id="custom-module-title"
+                  maxLength={100}
+                  onChange={(event) => {
+                    setCustomTitle(event.target.value);
+                  }}
+                  placeholder="自定义模块名称"
+                  value={customTitle}
+                />
+                <button disabled={!customTitle.trim()} onClick={addCustomSection} type="button">
+                  <EditorIcon name="plus" size={20} />
+                  新增自定义模块
+                </button>
+              </div>
+              <button
+                className={styles.manageOrderButton}
+                onClick={() => {
+                  setRightPanelMode('sorting');
+                }}
+                type="button"
+              >
+                <EditorIcon name="sort" size={20} />
+                管理模块顺序
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        {rightPanelMode === 'sorting' ? (
+          <>
+            <ol aria-label="模块顺序" className={styles.moduleList}>
+              {orderedSections.map((sectionValue, index) => (
+                <li
+                  className={styles.moduleRow}
+                  data-section-id={sectionValue.id}
+                  key={sectionValue.id}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                  }}
+                  onDrop={(event) => {
+                    handleDrop(event, index);
+                  }}
+                >
+                  <button
+                    aria-label={`拖动${sectionValue.title}，可使用上下方向键排序`}
+                    className={styles.dragHandle}
+                    draggable
+                    onDragEnd={() => {
+                      setDraggedSectionId(null);
+                    }}
+                    onDragStart={(event) => {
+                      setDraggedSectionId(sectionValue.id);
+                      event.dataTransfer.effectAllowed = 'move';
+                      event.dataTransfer.setData('text/plain', sectionValue.id);
+                    }}
+                    onKeyDown={(event) => {
+                      handleSortKey(event, sectionValue.id, index);
+                    }}
+                    ref={(node) => {
+                      if (node) actionRefs.current.set(`${sectionValue.id}:drag`, node);
+                      else actionRefs.current.delete(`${sectionValue.id}:drag`);
+                    }}
+                    type="button"
+                  >
+                    ⠿
+                  </button>
+                  <EditorIcon name={moduleGlyph[sectionValue.kind]} size={22} />
+                  <button
+                    className={styles.moduleName}
+                    onClick={() => {
+                      setSelectedSectionId(sectionValue.id);
+                      setLeftOpen(true);
+                    }}
+                    type="button"
+                  >
+                    <span>{sectionValue.title}</span>
+                  </button>
+                  <button
+                    aria-checked={sectionValue.visible}
+                    aria-label={`${sectionValue.visible ? '隐藏' : '显示'}${sectionValue.title}`}
+                    className={styles.visibilitySwitch}
+                    onClick={() => {
+                      toggleVisibility(sectionValue);
+                    }}
+                    ref={(node) => {
+                      if (node) actionRefs.current.set(`${sectionValue.id}:visibility`, node);
+                      else actionRefs.current.delete(`${sectionValue.id}:visibility`);
+                    }}
+                    role="switch"
+                    type="button"
+                  >
+                    <span />
+                  </button>
+                  <button
+                    aria-label={`${sectionValue.title}更多操作`}
+                    className={styles.moreButton}
+                    type="button"
+                  >
+                    <EditorIcon name="more" size={19} />
+                  </button>
+                </li>
+              ))}
+            </ol>
+            <div className={styles.sortingFooter}>
+              <button
+                onClick={() => {
+                  setRightPanelMode('modules');
+                }}
+                type="button"
+              >
+                新增自定义模块
+              </button>
+              <button
+                className={styles.primaryButton}
+                onClick={() => {
+                  setRightPanelMode('style');
+                }}
+                type="button"
+              >
+                完成排序
+              </button>
+            </div>
+          </>
+        ) : null}
+        <button className={styles.restoreButton} hidden onClick={restoreDefault} type="button">
           恢复默认顺序与显示
         </button>
         <div aria-label="模块操作通知" aria-live="polite" className={styles.srOnly} role="status">
@@ -915,19 +1159,274 @@ function EditorWorkspaceContent({
       </aside>
 
       <nav aria-label="编辑器工具" className={styles.rightRail}>
-        <button
-          aria-current="page"
-          aria-expanded={rightOpen}
-          aria-label={rightOpen ? '收起模块布局设置' : '展开模块布局设置'}
-          onClick={() => {
-            setRightOpen((value) => !value);
-          }}
-          title="模块布局"
-          type="button"
-        >
-          布
-        </button>
+        {(
+          [
+            ['style', 'template', '模板'],
+            ['modules', 'modules', '模块'],
+            ['style', 'share', '分享'],
+            ['style', 'typography', '排版'],
+            ['style', 'design', '设计'],
+            ['style', 'export', '页面'],
+            ['style', 'layout', 'AI 优化'],
+            ['style', 'diagnosis', 'JD 匹配'],
+          ] as const
+        ).map(([mode, icon, label]) => (
+          <button
+            aria-current={
+              rightOpen &&
+              ((label === '模板' && rightPanelMode === 'style') ||
+                (label === '模块' && rightPanelMode === 'modules'))
+                ? 'page'
+                : undefined
+            }
+            aria-label={label}
+            key={`${icon}-${label}`}
+            onClick={() => {
+              setRightPanelMode(mode);
+              setRightOpen(true);
+            }}
+            title={label}
+            type="button"
+          >
+            <EditorIcon name={icon} size={22} />
+          </button>
+        ))}
+        {!rightOpen ? (
+          <button
+            aria-expanded="false"
+            aria-label="展开模块布局设置"
+            className={styles.railEdgeToggle}
+            onClick={() => {
+              setRightOpen(true);
+            }}
+            title="展开设置面板"
+            type="button"
+          >
+            <EditorIcon name="chevron-left" size={16} />
+          </button>
+        ) : null}
       </nav>
+      {(cloudSaveStatus?.phase === 'failed' || cloudSaveStatus?.phase === 'retry-wait') &&
+      dismissedSavePhase !== cloudSaveStatus.phase ? (
+        <section
+          aria-label="保存状态通知"
+          className={styles.saveNotice}
+          data-phase={cloudSaveStatus.phase}
+          role="alert"
+        >
+          <span aria-hidden="true" className={styles.saveNoticeIcon}>
+            {cloudSaveStatus.phase === 'retry-wait' ? '◌' : '!'}
+          </span>
+          <div>
+            <strong>
+              {cloudSaveStatus.phase === 'retry-wait' ? '正在同步最新修改' : '无法保存最新修改'}
+            </strong>
+            <p>网络连接异常，你的内容暂时保存在本地。</p>
+            <div>
+              <button onClick={() => void onRetrySave()} type="button">
+                重新保存
+              </button>
+              <button
+                onClick={() => {
+                  setDismissedSavePhase(cloudSaveStatus.phase);
+                }}
+                type="button"
+              >
+                稍后重试
+              </button>
+            </div>
+          </div>
+          <button
+            aria-label="关闭保存状态通知"
+            className={styles.saveNoticeClose}
+            onClick={() => {
+              setDismissedSavePhase(cloudSaveStatus.phase);
+            }}
+            type="button"
+          >
+            ×
+          </button>
+        </section>
+      ) : null}
+      {overlay ? (
+        <div className={styles.actionOverlay}>
+          <section
+            aria-labelledby={`${overlay}-dialog-title`}
+            aria-modal="true"
+            className={styles.actionDialog}
+            role="dialog"
+          >
+            <header className={styles.actionDialogHeader}>
+              <EditorIcon name={overlay === 'share' ? 'share' : 'download'} size={36} />
+              <div>
+                <h2 id={`${overlay}-dialog-title`}>
+                  {overlay === 'share' ? '分享简历' : '导出 PDF'}
+                </h2>
+                <p>
+                  {overlay === 'share'
+                    ? '创建一个可随时关闭的只读链接'
+                    : '检查文件信息并生成可下载版本'}
+                </p>
+              </div>
+              <button
+                aria-label="关闭弹窗"
+                onClick={() => {
+                  setOverlay(null);
+                }}
+                type="button"
+              >
+                ×
+              </button>
+            </header>
+            {overlay === 'share' ? (
+              <div className={styles.shareDialogBody}>
+                <div className={styles.dialogSettingRow}>
+                  <div>
+                    <strong>开启分享链接</strong>
+                    <span>关闭后旧链接将立即失效</span>
+                  </div>
+                  <button
+                    aria-checked="true"
+                    className={styles.visibilitySwitch}
+                    role="switch"
+                    type="button"
+                  >
+                    <span />
+                  </button>
+                </div>
+                <div className={styles.dialogSettingRow}>
+                  <div>
+                    <strong>访问权限</strong>
+                    <span>访客无法修改原简历</span>
+                  </div>
+                  <b>只读预览</b>
+                </div>
+                <div className={styles.dialogSettingRow}>
+                  <div>
+                    <strong>链接有效期</strong>
+                  </div>
+                  <select defaultValue="7">
+                    <option value="7">7 天后失效</option>
+                  </select>
+                  <time>2026.09.25 23:59</time>
+                </div>
+                <div className={styles.dialogSettingRow}>
+                  <div>
+                    <strong>允许下载</strong>
+                    <span>访客可以下载当前 PDF 版本</span>
+                  </div>
+                  <button
+                    aria-checked="true"
+                    className={styles.visibilitySwitch}
+                    role="switch"
+                    type="button"
+                  >
+                    <span />
+                  </button>
+                </div>
+                <label className={styles.shareLinkField}>
+                  <span>分享链接</span>
+                  <div>
+                    <input readOnly value="https://resume.example/s/7HF2K9" />
+                    <button
+                      onClick={() => {
+                        setLinkCopied(true);
+                      }}
+                      type="button"
+                    >
+                      复制链接
+                    </button>
+                  </div>
+                  <small>{linkCopied ? '已复制' : '链接仅包含当前已保存版本'}</small>
+                </label>
+                <div className={styles.dialogInfo}>任何获得链接的人都可以查看，请谨慎分享</div>
+              </div>
+            ) : (
+              <div className={styles.exportDialogBody}>
+                <label>
+                  <span>文件名称</span>
+                  <div>
+                    <input defaultValue="张三-前端开发工程师.pdf" />
+                    <b>● 名称有效</b>
+                  </div>
+                </label>
+                <div className={styles.exportGrid}>
+                  <label>
+                    <span>文件格式</span>
+                    <select defaultValue="pdf">
+                      <option value="pdf">PDF</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>当前页数</span>
+                    <input readOnly value="1 页" />
+                  </label>
+                </div>
+                <div className={styles.exportCheck}>
+                  <strong>分页检查结果</strong>
+                  <span>✓ 检查通过</span>
+                  <small>未发现内容截切、空白页或异常分页</small>
+                </div>
+                <div className={styles.exportCheck}>
+                  <strong>用户权益状态</strong>
+                  <span>♕ 专业版 · 可导出</span>
+                  <small>本月剩余 8 次 PDF 导出</small>
+                </div>
+                <div className={styles.exportChecklist}>
+                  <strong>导出前检查</strong>
+                  <div>
+                    ✓ 中文字体已嵌入
+                    <br />✓ 页面尺寸为 A4
+                    <br />✓ 预览与导出内容一致
+                  </div>
+                </div>
+                <div className={styles.exportFailure}>
+                  <span>!</span>
+                  <div>
+                    <strong>生成失败</strong>
+                    <p>中文字体嵌入超时，未生成可下载文件。额度未扣减。</p>
+                  </div>
+                  <button type="button">重试</button>
+                </div>
+              </div>
+            )}
+            <footer className={styles.actionDialogFooter} data-kind={overlay}>
+              {overlay === 'share' ? (
+                <button type="button">关闭分享</button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setOverlay(null);
+                  }}
+                  type="button"
+                >
+                  取消
+                </button>
+              )}
+              <span />
+              {overlay === 'share' ? (
+                <button
+                  onClick={() => {
+                    setOverlay(null);
+                  }}
+                  type="button"
+                >
+                  取消
+                </button>
+              ) : null}
+              <button
+                className={styles.primaryButton}
+                onClick={() => {
+                  setOverlay(null);
+                }}
+                type="button"
+              >
+                {overlay === 'share' ? '完成' : '生成 PDF'}
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
       {conflictOpen && conflictView.status === 'ready' ? (
         <ConflictDialog
           context={conflictView.context}

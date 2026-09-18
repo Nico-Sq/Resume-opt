@@ -6,6 +6,7 @@ export type RenderFlowBlock =
       kind: 'header';
       keepWithNext: boolean;
       name: string;
+      headline: string;
       avatarUrl: string | null;
       contacts: ResumeRenderModel['contacts'];
       links: ResumeRenderModel['links'];
@@ -32,6 +33,7 @@ export type RenderFlowBlock =
 function hasHeader(model: ResumeRenderModel): boolean {
   return (
     model.name.trim().length > 0 ||
+    model.headline.trim().length > 0 ||
     model.avatarUrl !== null ||
     model.contacts.length > 0 ||
     model.links.length > 0
@@ -46,6 +48,7 @@ export function createRenderFlow(model: ResumeRenderModel): RenderFlowBlock[] {
       kind: 'header',
       keepWithNext: model.sections.length > 0,
       name: model.name,
+      headline: model.headline,
       avatarUrl: model.avatarUrl,
       contacts: model.contacts,
       links: model.links,
