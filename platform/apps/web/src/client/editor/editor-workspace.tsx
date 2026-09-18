@@ -31,6 +31,15 @@ import {
   useResumeEditorStore,
   type ResumeEditorStore,
 } from './store';
+import {
+  hasUnsyncedLocalChanges,
+  LocalDraftController,
+  type LocalDraftRecord,
+  type LocalDraftRepository,
+  type LocalDraftScope,
+  type LocalDraftStatus,
+  type LocalDraftUnavailableError,
+} from './persistence';
 import styles from './editor-workspace.module.css';
 
 export interface EditorResume {
@@ -43,6 +52,14 @@ export interface EditorResume {
 export interface EditorWorkspaceProps {
   initialResume: EditorResume;
   store?: ResumeEditorStore;
+  localDraft?: EditorLocalDraftContext;
+}
+
+export interface EditorLocalDraftContext {
+  repository: LocalDraftRepository;
+  scope: LocalDraftScope;
+  initialRecord: LocalDraftRecord | null;
+  initialError?: LocalDraftUnavailableError;
 }
 
 const repeatableKinds = new Set<ContentSection['kind']>([
@@ -106,23 +123,92 @@ function classNames(...values: Array<string | false | undefined>): string {
   return values.filter((value): value is string => typeof value === 'string').join(' ');
 }
 
-export function EditorWorkspace({ initialResume, store: providedStore }: EditorWorkspaceProps) {
-  const [store] = useState(
-    () =>
+export function EditorWorkspace({
+  initialResume,
+  store: providedStore,
+  localDraft,
+}: EditorWorkspaceProps) {
+  const [store] = useState(() => {
+    const editorStore =
       providedStore ??
       createResumeEditorStore({
         document: initialResume.document,
         revision: initialResume.revision,
-      }),
+      });
+    if (localDraft?.initialRecord && hasUnsyncedLocalChanges(localDraft.initialRecord)) {
+      editorStore.getState().hydrateWorkingCopy({
+        document: localDraft.initialRecord.workingSnapshot,
+        localSeq: localDraft.initialRecord.localSeq,
+        ackedSeq: localDraft.initialRecord.ackedSeq,
+        ackRevision: localDraft.initialRecord.baseRevision,
+      });
+    }
+    return editorStore;
+  });
+  const [localDraftStatus, setLocalDraftStatus] = useState<LocalDraftStatus | null>(
+    localDraft ? { phase: 'initializing' } : null,
   );
+  const localDraftControllerRef = useRef<LocalDraftController | null>(null);
+
+  useEffect(() => {
+    if (!localDraft) return;
+    const controller = new LocalDraftController({
+      repository: localDraft.repository,
+      scope: localDraft.scope,
+      store,
+      remoteDocument: initialResume.document,
+      remoteRevision: initialResume.revision,
+      initialRecord: localDraft.initialRecord,
+      ...(localDraft.initialError ? { initialError: localDraft.initialError } : {}),
+      onStatus: setLocalDraftStatus,
+    });
+    localDraftControllerRef.current = controller;
+    void controller.start();
+    const flushOnPageHide = () => {
+      void controller.flush();
+    };
+    window.addEventListener('pagehide', flushOnPageHide);
+    return () => {
+      window.removeEventListener('pagehide', flushOnPageHide);
+      localDraftControllerRef.current = null;
+      void controller.dispose();
+    };
+  }, [initialResume.document, initialResume.revision, localDraft, store]);
+
+  const exportRescue = () => {
+    const controller = localDraftControllerRef.current;
+    if (!controller) return;
+    const blob = new Blob([controller.createCurrentRescueJson()], {
+      type: 'application/json;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `resume-draft-${initialResume.id}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <ResumeEditorStoreProvider store={store}>
-      <EditorWorkspaceContent resume={initialResume} />
+      <EditorWorkspaceContent
+        localDraftStatus={localDraftStatus}
+        onExportRescue={exportRescue}
+        resume={initialResume}
+      />
     </ResumeEditorStoreProvider>
   );
 }
 
-function EditorWorkspaceContent({ resume }: { resume: EditorResume }) {
+function EditorWorkspaceContent({
+  resume,
+  localDraftStatus,
+  onExportRescue,
+}: {
+  resume: EditorResume;
+  localDraftStatus: LocalDraftStatus | null;
+  onExportRescue: () => void;
+}) {
   const resumeDocument = useResumeEditorStore((state) => state.document);
   const dispatch = useResumeEditorStore((state) => state.dispatch);
   const undo = useResumeEditorStore((state) => state.undo);
@@ -130,6 +216,7 @@ function EditorWorkspaceContent({ resume }: { resume: EditorResume }) {
   const canUndo = useResumeEditorStore((state) => state.canUndo);
   const canRedo = useResumeEditorStore((state) => state.canRedo);
   const isDirty = useResumeEditorStore((state) => state.isDirty);
+  const ackRevision = useResumeEditorStore((state) => state.ackRevision);
   const beginHistoryGroup = useResumeEditorStore((state) => state.beginHistoryGroup);
   const endHistoryGroup = useResumeEditorStore((state) => state.endHistoryGroup);
   const [leftOpen, setLeftOpen] = useState(true);
@@ -287,6 +374,22 @@ function EditorWorkspaceContent({ resume }: { resume: EditorResume }) {
     setAnnouncement(`已新增模块${title}`);
   };
 
+  const saveLabel = (() => {
+    if (!localDraftStatus) return isDirty ? '有未保存修改' : `版本 ${ackRevision}`;
+    switch (localDraftStatus.phase) {
+      case 'initializing':
+        return '正在检查本地草稿';
+      case 'backing-up':
+        return '正在本地备份';
+      case 'recovered':
+        return '已恢复本地草稿 · 尚未云端保存';
+      case 'error':
+        return isDirty ? '本地备份不可用 · 尚未保存' : `云端版本 ${ackRevision}`;
+      case 'backed-up':
+        return isDirty ? '已本地备份 · 尚未云端保存' : `云端版本 ${ackRevision}`;
+    }
+  })();
+
   return (
     <main
       className={classNames(
@@ -300,9 +403,14 @@ function EditorWorkspaceContent({ resume }: { resume: EditorResume }) {
           <span className={styles.eyebrow}>固定测试简历</span>
           <strong>{resume.title}</strong>
         </div>
-        <span className={styles.saveState}>
-          {isDirty ? '有未保存修改' : `版本 ${resume.revision}`}
-        </span>
+        <div aria-live="polite" className={styles.saveStateGroup} role="status">
+          <span className={styles.saveState}>{saveLabel}</span>
+          {localDraftStatus?.phase === 'error' && isDirty ? (
+            <button className={styles.rescueButton} onClick={onExportRescue} type="button">
+              导出救援副本
+            </button>
+          ) : null}
+        </div>
         <div className={styles.topbarActions}>
           <button
             aria-label="撤销"

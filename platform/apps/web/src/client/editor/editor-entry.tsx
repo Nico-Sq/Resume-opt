@@ -4,7 +4,19 @@ import { ResumeDocumentV1Schema } from '@resume/domain/resume';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
-import { EditorWorkspace, type EditorResume } from './editor-workspace';
+import {
+  classifyLocalDraftError,
+  DexieLocalDraftRepository,
+  getOrCreateEditorTabId,
+  type LocalDraftRecord,
+  type LocalDraftScope,
+  type LocalDraftUnavailableError,
+} from './persistence';
+import {
+  EditorWorkspace,
+  type EditorLocalDraftContext,
+  type EditorResume,
+} from './editor-workspace';
 import styles from './editor-workspace.module.css';
 
 const EditorResponseSchema = z.object({
@@ -18,10 +30,12 @@ const EditorResponseSchema = z.object({
 
 type LoadState =
   | { status: 'loading' }
-  | { status: 'ready'; resume: EditorResume }
+  | { status: 'ready'; resume: EditorResume; localDraft: EditorLocalDraftContext }
   | { status: 'error'; message: string };
 
-async function loadEditorResume(signal: AbortSignal): Promise<EditorResume> {
+async function loadEditorResume(
+  signal: AbortSignal,
+): Promise<{ resume: EditorResume; localDraft: EditorLocalDraftContext }> {
   const response = await fetch('/api/v1/editor-bootstrap', {
     cache: 'no-store',
     headers: { Accept: 'application/json' },
@@ -29,7 +43,33 @@ async function loadEditorResume(signal: AbortSignal): Promise<EditorResume> {
   });
   if (!response.ok) throw new Error('固定测试简历暂时无法加载');
   const payload: unknown = await response.json();
-  return EditorResponseSchema.parse(payload).data;
+  const resume = EditorResponseSchema.parse(payload).data;
+  const userId = z.uuid().parse(response.headers.get('x-local-draft-account'));
+  const repository = new DexieLocalDraftRepository();
+  let tabId = crypto.randomUUID();
+  let initialRecord: LocalDraftRecord | null = null;
+  let initialError: LocalDraftUnavailableError | undefined;
+  try {
+    tabId = getOrCreateEditorTabId(window.sessionStorage);
+    const scope: LocalDraftScope = { userId, resumeId: resume.id, tabId };
+    initialRecord = await repository.get(scope);
+  } catch (error) {
+    initialError = classifyLocalDraftError(error);
+  }
+  if (signal.aborted) {
+    repository.close();
+    throw new DOMException('编辑器加载已取消', 'AbortError');
+  }
+  const scope: LocalDraftScope = { userId, resumeId: resume.id, tabId };
+  return {
+    resume,
+    localDraft: {
+      repository,
+      scope,
+      initialRecord,
+      ...(initialError ? { initialError } : {}),
+    },
+  };
 }
 
 export function EditorEntry() {
@@ -39,8 +79,8 @@ export function EditorEntry() {
   useEffect(() => {
     const controller = new AbortController();
     void loadEditorResume(controller.signal).then(
-      (resume) => {
-        setState({ status: 'ready', resume });
+      ({ resume, localDraft }) => {
+        setState({ status: 'ready', resume, localDraft });
       },
       (error: unknown) => {
         if (controller.signal.aborted) return;
@@ -55,7 +95,9 @@ export function EditorEntry() {
     };
   }, [attempt]);
 
-  if (state.status === 'ready') return <EditorWorkspace initialResume={state.resume} />;
+  if (state.status === 'ready') {
+    return <EditorWorkspace initialResume={state.resume} localDraft={state.localDraft} />;
+  }
   return (
     <main className={styles.entryState}>
       <section aria-live="polite" className={styles.entryStatePanel}>
