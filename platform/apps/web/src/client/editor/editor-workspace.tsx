@@ -52,6 +52,7 @@ import {
   HttpConflictSnapshotTransport,
   type ConflictSnapshotTransport,
 } from './conflict';
+import { SectionFieldsEditor } from './section-fields-editor';
 import styles from './editor-workspace.module.css';
 
 export interface EditorResume {
@@ -721,9 +722,7 @@ function EditorWorkspaceContent({
                 新增一条内容
               </button>
             ) : null}
-            <p className={styles.helperText}>
-              字段级编辑将在编辑闭环中继续接入；本阶段验证模块结构与预览联动。
-            </p>
+            <SectionFieldsEditor onFlushSave={onFlushSave} section={selectedSection} />
           </section>
         ) : null}
         <div className={styles.leftPanelFooter}>

@@ -56,8 +56,10 @@ export function useResumeTextField<
   const formValue: unknown = controller.field.value;
 
   useEffect(() => {
-    if (typeof storeValue === 'string' && storeValue !== formValue) {
-      controller.field.onChange(storeValue);
+    const normalizedStoreValue =
+      typeof storeValue === 'string' ? storeValue : storeValue === null ? '' : undefined;
+    if (normalizedStoreValue !== undefined && normalizedStoreValue !== formValue) {
+      controller.field.onChange(normalizedStoreValue);
     }
   }, [controller.field, formValue, storeValue]);
 

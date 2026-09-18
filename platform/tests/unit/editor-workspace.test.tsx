@@ -285,6 +285,114 @@ describe('editor workspace module management', () => {
     expect(store.getState()).toMatchObject({ isDirty: false, ackRevision: '2' });
   });
 
+  it('completes edit, preview, save and server-snapshot reload for a real resume field', async () => {
+    const user = userEvent.setup();
+    const { resume, store } = createFixture();
+    const repository = new MemoryLocalDraftRepository();
+    const scope = { userId: randomUUID(), resumeId: resume.id, tabId: randomUUID() };
+    const save = vi.fn<SaveTransport['save']>((envelope) => {
+      return Promise.resolve({
+        resumeId: envelope.resumeId,
+        revision: '2',
+        versionId: randomUUID(),
+        acknowledgedSeq: envelope.clientSeq,
+        savedAt: '2026-09-18T08:00:00.000Z',
+        contentHash: 'e'.repeat(64),
+      });
+    });
+    const firstRender = render(
+      <EditorWorkspace
+        initialResume={resume}
+        localDraft={{ repository, scope, initialRecord: null }}
+        saveTransport={{ save }}
+        store={store}
+      />,
+    );
+    await waitFor(() => {
+      expect(repository.record).not.toBeNull();
+    });
+
+    const name = screen.getByRole('textbox', { name: '姓名' });
+    await user.clear(name);
+    await user.type(name, '林小满（已验证）');
+    expect(firstRender.container.querySelector('.resume-page')?.textContent).toContain(
+      '林小满（已验证）',
+    );
+    await user.tab();
+
+    await waitFor(() => {
+      expect(screen.getByText('已保存 · 版本 2')).toBeInstanceOf(HTMLElement);
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    const savedEnvelope = save.mock.calls[0]?.[0];
+    if (!savedEnvelope) throw new Error('保存调用未产生服务器快照');
+    const reloadedDocument: ResumeDocumentV1 = structuredClone(savedEnvelope.document);
+    firstRender.unmount();
+
+    const reloadedStore = createResumeEditorStore({ document: reloadedDocument, revision: '2' });
+    const secondRender = render(
+      <EditorWorkspace
+        initialResume={{ ...resume, document: reloadedDocument, revision: '2' }}
+        store={reloadedStore}
+      />,
+    );
+
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: '姓名' }).value).toBe(
+      '林小满（已验证）',
+    );
+    expect(secondRender.container.querySelector('.resume-page')?.textContent).toContain(
+      '林小满（已验证）',
+    );
+    expect(reloadedStore.getState()).toMatchObject({ ackRevision: '2', isDirty: false });
+  });
+
+  it('keeps list-field focus while entering multiple values and commits them as one edit group', async () => {
+    const user = userEvent.setup();
+    const { resume, store } = createFixture();
+    render(<EditorWorkspace initialResume={resume} store={store} />);
+    await user.click(screen.getByRole('button', { name: '求职意向' }));
+    const industries = screen.getByRole<HTMLTextAreaElement>('textbox', { name: '目标行业' });
+
+    await user.type(industries, '互联网,人工智能');
+
+    expect(document.activeElement).toBe(industries);
+    expect(sectionByKind(store.getState().document, 'intent').entries[0]?.industries).toEqual([
+      '互联网',
+      '人工智能',
+    ]);
+    await user.tab();
+    expect(store.getState().undo()).toBe(true);
+    expect(sectionByKind(store.getState().document, 'intent').entries[0]?.industries).toEqual([]);
+  });
+
+  it('buffers an incomplete link and only commits a schema-valid URL on blur', async () => {
+    const user = userEvent.setup();
+    const { resume, store } = createFixture();
+    const project = sectionByKind(store.getState().document, 'project');
+    const projectEntry = project.entries[0];
+    if (!projectEntry) throw new Error('fixture 缺少项目条目');
+    store
+      .getState()
+      .dispatch({ type: 'add-link', sectionId: project.id, entryId: projectEntry.id });
+    render(<EditorWorkspace initialResume={resume} store={store} />);
+    await user.click(screen.getByRole('button', { name: '项目经历' }));
+    const url = screen.getByRole<HTMLInputElement>('textbox', { name: '链接地址' });
+
+    await user.type(url, 'https://');
+    await user.tab();
+
+    expect(url.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByRole('alert').textContent).toContain('完整地址');
+    expect(sectionByKind(store.getState().document, 'project').entries[0]?.links[0]?.url).toBe('');
+
+    await user.click(url);
+    await user.type(url, 'example.com/resume');
+    await user.tab();
+    expect(sectionByKind(store.getState().document, 'project').entries[0]?.links[0]?.url).toBe(
+      'https://example.com/resume',
+    );
+  });
+
   it('warns before leaving while edits are not acknowledged', () => {
     const { resume, store } = createFixture();
     render(<EditorWorkspace initialResume={resume} store={store} />);

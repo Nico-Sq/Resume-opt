@@ -270,9 +270,11 @@
   font-weight: 500;
 }
 .sectionEditor input,
+.sectionEditor textarea,
+.sectionEditor select,
 .customModuleForm input {
   width: 100%;
-  height: 36px;
+  min-height: 36px;
   border: 1px solid #2a2a2a;
   border-radius: 4px;
   outline: none;
@@ -282,7 +284,15 @@
   font: inherit;
   font-size: 13px;
 }
+.sectionEditor textarea {
+  min-height: 68px;
+  resize: vertical;
+  padding-block: 8px;
+  line-height: 20px;
+}
 .sectionEditor input:focus,
+.sectionEditor textarea:focus,
+.sectionEditor select:focus,
 .customModuleForm input:focus {
   border-color: #737373;
 }
@@ -320,6 +330,123 @@
 }
 .sectionEditor .helperText {
   margin-inline: 0;
+}
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+  margin-top: 16px;
+}
+.wideField,
+.fieldGrid > fieldset,
+.fieldGrid > .periodFields,
+.fieldGrid > .contactField {
+  grid-column: 1 / -1;
+}
+.contactField {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+.checkboxField {
+  display: flex !important;
+  min-height: 36px;
+  align-items: center;
+  grid-template-columns: auto 1fr;
+  gap: 8px !important;
+  white-space: nowrap;
+}
+.checkboxField input {
+  width: 16px;
+  min-height: 16px;
+  accent-color: #f5f5f5;
+}
+.periodFields {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: end;
+  gap: 10px;
+}
+.nestedFieldset {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  border: 1px solid #242424;
+  border-radius: 4px;
+  padding: 12px;
+}
+.nestedFieldset legend {
+  color: #a3a3a3;
+  padding: 0 5px;
+  font-size: 12px;
+}
+.inlineEditor,
+.linkEditor {
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid #242424;
+  padding-bottom: 10px;
+}
+.inlineEditor {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+.linkEditor {
+  grid-template-columns: 1fr 1fr auto;
+  align-items: end;
+}
+.inlineEditor button,
+.linkEditor button,
+.inlineAddButton,
+.entryActions button {
+  min-height: 32px;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  background: transparent;
+  color: #a3a3a3;
+  cursor: pointer;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+}
+.inlineAddButton {
+  justify-self: start;
+}
+.entryCard {
+  margin-top: 16px;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+  background: #101010;
+}
+.entryCard > summary {
+  cursor: pointer;
+  color: #f5f5f5;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.entryCardBody {
+  border-top: 1px solid #242424;
+  padding: 0 12px 14px;
+}
+.entryActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid #242424;
+  padding: 10px 12px;
+}
+.emptyState {
+  margin: 16px 0 0;
+  color: #a3a3a3;
+  font-size: 12px;
+}
+.fieldError {
+  color: #d9a08b;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 17px;
 }
 .leftPanelFooter {
   position: sticky;
