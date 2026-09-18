@@ -10,7 +10,7 @@ import { createPostgresPool } from '@resume/infrastructure/postgres';
 
 type DatabasePool = ReturnType<typeof createPostgresPool>;
 
-const schemaPattern = /^restore_(source|target)_[a-f0-9]{32}$/u;
+const schemaPattern = /^(?:restore_(?:source|target)|native_restore)_[a-f0-9]{32}$/u;
 const tables = [
   { name: 'schema_migrations', orderBy: 'name', restore: false },
   { name: 'templates', orderBy: 'template_id, version', restore: true },
@@ -28,7 +28,7 @@ const tables = [
 type TableName = (typeof tables)[number]['name'];
 type Snapshot = Record<TableName, Array<Record<string, unknown>>>;
 
-function quoteIdentifier(identifier: string): string {
+export function quoteIdentifier(identifier: string): string {
   if (!schemaPattern.test(identifier) && !/^[a-z_]+$/u.test(identifier)) {
     throw new Error(`不安全的数据库标识符：${identifier}`);
   }
@@ -54,7 +54,10 @@ function deterministicIds() {
   return () => `20000000-0000-4000-8000-${String(counter++).padStart(12, '0')}`;
 }
 
-async function seedSyntheticBackupFixture(pool: DatabasePool, schema: string): Promise<void> {
+export async function seedSyntheticBackupFixture(
+  pool: DatabasePool,
+  schema: string,
+): Promise<void> {
   const nextId = deterministicIds();
   const userId = nextId();
   const resumeId = nextId();
@@ -104,7 +107,7 @@ async function seedSyntheticBackupFixture(pool: DatabasePool, schema: string): P
   );
 }
 
-async function captureSnapshot(pool: DatabasePool, schema: string): Promise<Snapshot> {
+export async function captureSnapshot(pool: DatabasePool, schema: string): Promise<Snapshot> {
   const entries = await Promise.all(
     tables.map(async (table) => {
       const rowExpression =
@@ -120,7 +123,7 @@ async function captureSnapshot(pool: DatabasePool, schema: string): Promise<Snap
   return Object.fromEntries(entries) as Snapshot;
 }
 
-function snapshotSummary(snapshot: Snapshot) {
+export function snapshotSummary(snapshot: Snapshot) {
   return Object.fromEntries(
     tables.map((table) => {
       const rows = snapshot[table.name];
@@ -161,7 +164,7 @@ async function restoreSnapshot(
   }
 }
 
-async function verifyTarget(
+export async function verifyTarget(
   pool: DatabasePool,
   schema: string,
 ): Promise<{

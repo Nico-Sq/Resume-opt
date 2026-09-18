@@ -35,6 +35,9 @@ describe('GitHub verification workflow', () => {
     expect(fullGateIndex).toBeGreaterThan(provisionIndex);
     expect(workflow).toContain('if: always()');
     expect(workflow).toContain('path: platform/artifacts/ci');
+    expect(workflow).toContain('pnpm ops:restore:native');
+    expect(workflow).toContain('PG_NATIVE_RESTORE_MODE: docker');
+    expect(workflow).toContain('${{ job.services.postgres.id }}');
   });
 
   it('runs every full-gate phase and labels CI performance evidence correctly', async () => {

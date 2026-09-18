@@ -71,6 +71,12 @@ jobs:
       - name: Run complete V0.1 verification gate
         run: pnpm ci:full
 
+      - name: Rehearse native pg_dump and pg_restore
+        env:
+          PG_NATIVE_RESTORE_MODE: docker
+          PG_NATIVE_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: pnpm ops:restore:native -- --output artifacts/ci/native-restore.json
+
       - name: Preserve sanitized verification evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
