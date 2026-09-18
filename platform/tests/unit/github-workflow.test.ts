@@ -16,6 +16,8 @@ describe('GitHub verification workflow', () => {
     expect(workflow).toContain('permissions:\n  contents: read');
     expect(workflow).not.toContain('pull_request_target');
     expect(workflow).not.toContain('192.168.19.200');
+    expect(workflow).toContain('runs-on: ubuntu-24.04');
+    expect(workflow).not.toContain('ubuntu-latest');
     expect(workflow).toContain('image: postgres:16.15-bookworm');
     expect(workflow).toContain(
       'PG_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres',
@@ -43,6 +45,7 @@ describe('GitHub verification workflow', () => {
 
     expect(packageJson.scripts['perf:baseline']).not.toContain('--environment local');
     expect(fullGate).toContain('pnpm ci:fast');
+    expect(packageJson.scripts['ci:fast']).toContain('pnpm typegen');
     expect(fullGate).toContain('pnpm test:integration');
     expect(fullGate).toContain('pnpm test:save');
     expect(fullGate).toContain('--environment ci');

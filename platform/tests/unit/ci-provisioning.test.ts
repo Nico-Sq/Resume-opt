@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertEphemeralAdminTarget } from '../../scripts/ci/provision-ephemeral-postgres';
+import {
+  assertEphemeralAdminTarget,
+  createProvisioningEvidence,
+} from '../../scripts/ci/provision-ephemeral-postgres';
 
 describe('CI ephemeral PostgreSQL safety gate', () => {
   const localAdminUrl = 'postgresql://postgres:ephemeral@127.0.0.1:5432/postgres';
@@ -27,5 +30,15 @@ describe('CI ephemeral PostgreSQL safety gate', () => {
     expect(() => {
       assertEphemeralAdminTarget('true', connectionString);
     }).toThrow('只允许连接 localhost:5432');
+  });
+
+  it('creates sanitized evidence without credentials or connection strings', () => {
+    const evidence = createProvisioningEvidence('16.15', '2026-09-18T00:00:00.000Z');
+    const serialized = JSON.stringify(evidence);
+
+    expect(evidence.passed).toBe(true);
+    expect(evidence.serverVersion).toBe('16.15');
+    expect(serialized).not.toContain('password');
+    expect(serialized).not.toContain('postgresql://');
   });
 });

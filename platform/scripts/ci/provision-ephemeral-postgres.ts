@@ -1,3 +1,4 @@
+import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -64,7 +65,25 @@ async function configureDatabase(
   }
 }
 
-export async function provisionEphemeralPostgres(): Promise<void> {
+export function createProvisioningEvidence(serverVersion: string, generatedAt: string) {
+  return {
+    schemaVersion: 1,
+    scope: 'github-hosted-ephemeral-postgresql',
+    generatedAt,
+    serverVersion,
+    roles: [...ciRoles],
+    databases: [...ciDatabases],
+    safety: {
+      ciRequired: true,
+      localhostOnly: true,
+      existingObjectsRejected: true,
+      productionCredentialsUsed: false,
+    },
+    passed: true,
+  };
+}
+
+export async function provisionEphemeralPostgres(): Promise<{ serverVersion: string }> {
   const adminUrl = requiredEnvironment('PG_ADMIN_URL');
   assertEphemeralAdminTarget(process.env.CI, adminUrl);
   const admin = createPostgresPool({
@@ -72,8 +91,12 @@ export async function provisionEphemeralPostgres(): Promise<void> {
     max: 1,
     applicationName: 'resume-opt-ci-provision-admin',
   });
+  let serverVersion = '';
 
   try {
+    const version = await admin.query<{ server_version: string }>('show server_version');
+    serverVersion = version.rows[0]?.server_version ?? '';
+    if (!serverVersion) throw new Error('无法读取 PostgreSQL server_version');
     const existingRoles = await admin.query<{ rolname: string }>(
       'SELECT rolname FROM pg_roles WHERE rolname = ANY($1)',
       [ciRoles],
@@ -124,10 +147,20 @@ export async function provisionEphemeralPostgres(): Promise<void> {
   console.log(
     'CI ephemeral PostgreSQL roles and databases are ready. No credentials were printed.',
   );
+  return { serverVersion };
 }
 
 async function main(): Promise<void> {
-  await provisionEphemeralPostgres();
+  const { serverVersion } = await provisionEphemeralPostgres();
+  const evidenceDirectory = resolve('artifacts/ci');
+  const evidencePath = resolve(evidenceDirectory, 'provisioning.json');
+  await mkdir(evidenceDirectory, { recursive: true });
+  await writeFile(
+    evidencePath,
+    `${JSON.stringify(createProvisioningEvidence(serverVersion, new Date().toISOString()), null, 2)}\n`,
+    'utf8',
+  );
+  console.log(`Sanitized provisioning evidence written to ${evidencePath}.`);
 }
 
 const entryPath = process.argv[1] ? resolve(process.argv[1]) : '';
