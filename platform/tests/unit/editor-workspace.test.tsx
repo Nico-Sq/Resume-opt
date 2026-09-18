@@ -2,7 +2,8 @@
 
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createInitialResumeDocument,
@@ -10,7 +11,74 @@ import {
   type ResumeDocumentV1,
 } from '@resume/domain/resume';
 import { EditorWorkspace } from '../../apps/web/src/client/editor/editor-workspace';
+import type {
+  AcknowledgePendingInput,
+  LocalDraftRecord,
+  LocalDraftRepository,
+  LocalDraftScope,
+  PendingSaveEnvelope,
+} from '../../apps/web/src/client/editor/persistence';
+import type { SaveTransport } from '../../apps/web/src/client/editor/saving';
 import { createResumeEditorStore } from '../../apps/web/src/client/editor/store';
+
+class MemoryLocalDraftRepository implements LocalDraftRepository {
+  record: LocalDraftRecord | null = null;
+
+  get(): Promise<LocalDraftRecord | null> {
+    return Promise.resolve(this.record);
+  }
+
+  put(record: LocalDraftRecord): Promise<void> {
+    this.record = record;
+    return Promise.resolve();
+  }
+
+  setPending(_scope: LocalDraftScope, envelope: PendingSaveEnvelope): Promise<void> {
+    if (!this.record) return Promise.reject(new Error('缺少本地草稿'));
+    this.record = { ...this.record, pendingEnvelope: envelope };
+    return Promise.resolve();
+  }
+
+  discardPending(_scope: LocalDraftScope, idempotencyKey: string): Promise<boolean> {
+    if (this.record?.pendingEnvelope?.idempotencyKey !== idempotencyKey) {
+      return Promise.resolve(false);
+    }
+    this.record = { ...this.record, pendingEnvelope: null };
+    return Promise.resolve(true);
+  }
+
+  acknowledgePending(_scope: LocalDraftScope, input: AcknowledgePendingInput): Promise<boolean> {
+    if (this.record?.pendingEnvelope?.idempotencyKey !== input.idempotencyKey) {
+      return Promise.resolve(false);
+    }
+    this.record = {
+      ...this.record,
+      baseRevision: input.revision,
+      baseSnapshot: input.baseSnapshot,
+      workingSnapshot: input.workingSnapshot,
+      localSeq: input.localSeq,
+      ackedSeq: input.clientSeq,
+      pendingEnvelope: null,
+    };
+    return Promise.resolve(true);
+  }
+
+  exportAccountRescue(): Promise<string> {
+    return Promise.resolve('{}');
+  }
+
+  clearAccount(): Promise<number> {
+    this.record = null;
+    return Promise.resolve(1);
+  }
+
+  delete(): Promise<void> {
+    this.record = null;
+    return Promise.resolve();
+  }
+
+  close(): void {}
+}
 
 function deterministicIds() {
   let counter = 1;
@@ -174,5 +242,45 @@ describe('editor workspace module management', () => {
     expect(
       screen.getByRole('button', { name: '展开模块布局设置' }).getAttribute('aria-expanded'),
     ).toBe('false');
+  });
+
+  it('flushes on field blur and reports cloud ACK separately from local backup', async () => {
+    const user = userEvent.setup();
+    const { resume, store } = createFixture();
+    const repository = new MemoryLocalDraftRepository();
+    const scope = { userId: randomUUID(), resumeId: resume.id, tabId: randomUUID() };
+    const save = vi.fn<SaveTransport['save']>((envelope) =>
+      Promise.resolve({
+        resumeId: envelope.resumeId,
+        revision: String(Number(envelope.baseRevision) + 1),
+        versionId: randomUUID(),
+        acknowledgedSeq: envelope.clientSeq,
+        savedAt: '2026-09-18T08:00:00.000Z',
+        contentHash: 'c'.repeat(64),
+      }),
+    );
+    render(
+      <EditorWorkspace
+        initialResume={resume}
+        localDraft={{ repository, scope, initialRecord: null }}
+        saveTransport={{ save }}
+        store={store}
+      />,
+    );
+    await waitFor(() => {
+      expect(repository.record).not.toBeNull();
+    });
+    const title = screen.getByRole('textbox', { name: '模块标题' });
+
+    await user.click(title);
+    await user.keyboard('{Control>}a{/Control}');
+    await user.type(title, '基本资料');
+    await user.tab();
+
+    await waitFor(() => {
+      expect(screen.getByText('已保存 · 版本 2')).toBeInstanceOf(HTMLElement);
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(store.getState()).toMatchObject({ isDirty: false, ackRevision: '2' });
   });
 });

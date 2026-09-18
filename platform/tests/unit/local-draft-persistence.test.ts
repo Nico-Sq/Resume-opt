@@ -181,6 +181,8 @@ describe('Dexie local draft repository', () => {
         revision: '2',
         clientSeq: 1,
         baseSnapshot: sent,
+        workingSnapshot: newer,
+        localSeq: 2,
       }),
     ).resolves.toBe(false);
     await expect(
@@ -189,6 +191,8 @@ describe('Dexie local draft repository', () => {
         revision: '2',
         clientSeq: 1,
         baseSnapshot: sent,
+        workingSnapshot: newer,
+        localSeq: 2,
       }),
     ).resolves.toBe(true);
 
@@ -200,6 +204,32 @@ describe('Dexie local draft repository', () => {
       ackedSeq: 1,
       pendingEnvelope: null,
     });
+    repository.close();
+  });
+
+  it('discards only the matching definitively rejected pending envelope', async () => {
+    const name = databaseName();
+    const repository = new DexieLocalDraftRepository(name, () => fixedNow);
+    const draftScope = scope();
+    const envelope: PendingSaveEnvelope = {
+      idempotencyKey: randomUUID(),
+      resumeId: draftScope.resumeId,
+      baseRevision: '1',
+      clientSeq: 1,
+      document: createInitialResumeDocument(),
+      createdAt: fixedNow.toISOString(),
+    };
+    await repository.put(record(draftScope, { localSeq: 1 }));
+    await repository.setPending(draftScope, envelope);
+
+    await expect(repository.discardPending(draftScope, randomUUID())).resolves.toBe(false);
+    await expect(repository.get(draftScope)).resolves.toMatchObject({
+      pendingEnvelope: envelope,
+    });
+    await expect(repository.discardPending(draftScope, envelope.idempotencyKey)).resolves.toBe(
+      true,
+    );
+    await expect(repository.get(draftScope)).resolves.toMatchObject({ pendingEnvelope: null });
     repository.close();
   });
 
@@ -267,6 +297,9 @@ class FailingRepository implements LocalDraftRepository {
     return Promise.reject(this.failure);
   }
   setPending(): Promise<void> {
+    return Promise.reject(this.failure);
+  }
+  discardPending(): Promise<boolean> {
     return Promise.reject(this.failure);
   }
   acknowledgePending(): Promise<boolean> {

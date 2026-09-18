@@ -40,6 +40,12 @@ import {
   type LocalDraftStatus,
   type LocalDraftUnavailableError,
 } from './persistence';
+import {
+  HttpSaveTransport,
+  SaveCoordinator,
+  type SaveCoordinatorStatus,
+  type SaveTransport,
+} from './saving';
 import styles from './editor-workspace.module.css';
 
 export interface EditorResume {
@@ -53,6 +59,7 @@ export interface EditorWorkspaceProps {
   initialResume: EditorResume;
   store?: ResumeEditorStore;
   localDraft?: EditorLocalDraftContext;
+  saveTransport?: SaveTransport;
 }
 
 export interface EditorLocalDraftContext {
@@ -127,6 +134,7 @@ export function EditorWorkspace({
   initialResume,
   store: providedStore,
   localDraft,
+  saveTransport,
 }: EditorWorkspaceProps) {
   const [store] = useState(() => {
     const editorStore =
@@ -148,7 +156,15 @@ export function EditorWorkspace({
   const [localDraftStatus, setLocalDraftStatus] = useState<LocalDraftStatus | null>(
     localDraft ? { phase: 'initializing' } : null,
   );
+  const [cloudSaveStatus, setCloudSaveStatus] = useState<SaveCoordinatorStatus | null>(() =>
+    localDraft
+      ? store.getState().isDirty
+        ? { phase: 'dirty' }
+        : { phase: 'synced', revision: store.getState().ackRevision }
+      : null,
+  );
   const localDraftControllerRef = useRef<LocalDraftController | null>(null);
+  const saveCoordinatorRef = useRef<SaveCoordinator | null>(null);
 
   useEffect(() => {
     if (!localDraft) return;
@@ -163,17 +179,40 @@ export function EditorWorkspace({
       onStatus: setLocalDraftStatus,
     });
     localDraftControllerRef.current = controller;
-    void controller.start();
+    let disposed = false;
+    void controller.start().then(() => {
+      if (disposed) return;
+      const saveCoordinator = new SaveCoordinator({
+        resumeId: initialResume.id,
+        store,
+        persistence: controller,
+        transport: saveTransport ?? new HttpSaveTransport(),
+        onStatus: setCloudSaveStatus,
+      });
+      saveCoordinatorRef.current = saveCoordinator;
+      saveCoordinator.start();
+    });
     const flushOnPageHide = () => {
       void controller.flush();
+      void saveCoordinatorRef.current?.flush();
     };
     window.addEventListener('pagehide', flushOnPageHide);
     return () => {
+      disposed = true;
       window.removeEventListener('pagehide', flushOnPageHide);
+      saveCoordinatorRef.current?.dispose();
+      saveCoordinatorRef.current = null;
       localDraftControllerRef.current = null;
       void controller.dispose();
     };
-  }, [initialResume.document, initialResume.revision, localDraft, store]);
+  }, [
+    initialResume.document,
+    initialResume.id,
+    initialResume.revision,
+    localDraft,
+    saveTransport,
+    store,
+  ]);
 
   const exportRescue = () => {
     const controller = localDraftControllerRef.current;
@@ -189,11 +228,17 @@ export function EditorWorkspace({
     URL.revokeObjectURL(url);
   };
 
+  const flushSave = () => saveCoordinatorRef.current?.flush() ?? Promise.resolve();
+  const retrySave = () => saveCoordinatorRef.current?.retryNow() ?? Promise.resolve();
+
   return (
     <ResumeEditorStoreProvider store={store}>
       <EditorWorkspaceContent
+        cloudSaveStatus={cloudSaveStatus}
         localDraftStatus={localDraftStatus}
         onExportRescue={exportRescue}
+        onFlushSave={flushSave}
+        onRetrySave={retrySave}
         resume={initialResume}
       />
     </ResumeEditorStoreProvider>
@@ -202,12 +247,18 @@ export function EditorWorkspace({
 
 function EditorWorkspaceContent({
   resume,
+  cloudSaveStatus,
   localDraftStatus,
   onExportRescue,
+  onFlushSave,
+  onRetrySave,
 }: {
   resume: EditorResume;
+  cloudSaveStatus: SaveCoordinatorStatus | null;
   localDraftStatus: LocalDraftStatus | null;
   onExportRescue: () => void;
+  onFlushSave: () => Promise<void>;
+  onRetrySave: () => Promise<void>;
 }) {
   const resumeDocument = useResumeEditorStore((state) => state.document);
   const dispatch = useResumeEditorStore((state) => state.dispatch);
@@ -375,20 +426,40 @@ function EditorWorkspaceContent({
   };
 
   const saveLabel = (() => {
-    if (!localDraftStatus) return isDirty ? '有未保存修改' : `版本 ${ackRevision}`;
-    switch (localDraftStatus.phase) {
-      case 'initializing':
-        return '正在检查本地草稿';
-      case 'backing-up':
-        return '正在本地备份';
-      case 'recovered':
-        return '已恢复本地草稿 · 尚未云端保存';
-      case 'error':
-        return isDirty ? '本地备份不可用 · 尚未保存' : `云端版本 ${ackRevision}`;
-      case 'backed-up':
-        return isDirty ? '已本地备份 · 尚未云端保存' : `云端版本 ${ackRevision}`;
+    if (!cloudSaveStatus) return isDirty ? '有未保存修改' : `版本 ${ackRevision}`;
+    switch (cloudSaveStatus.phase) {
+      case 'synced':
+        return localDraftStatus?.phase === 'error'
+          ? `云端已保存 · 本地备份不可用 · 版本 ${cloudSaveStatus.revision}`
+          : `已保存 · 版本 ${cloudSaveStatus.revision}`;
+      case 'saving':
+        return '正在保存';
+      case 'retry-wait':
+        return `保存中断 · 正在准备第 ${String(cloudSaveStatus.attempt)} 次重试`;
+      case 'failed':
+        return localDraftStatus?.phase === 'error'
+          ? '保存失败 · 请导出救援副本'
+          : '保存失败 · 已保留本地草稿';
+      case 'conflict':
+        return '版本冲突 · 已暂停自动保存';
+      case 'auth-paused':
+        return '登录状态失效 · 已暂停自动保存';
+      case 'validation-error':
+        return '内容校验失败 · 尚未保存';
+      case 'dirty':
+      case 'debouncing':
+        if (localDraftStatus?.phase === 'error') return '本地备份不可用 · 尚未云端保存';
+        if (localDraftStatus?.phase === 'initializing') return '正在检查本地草稿';
+        if (localDraftStatus?.phase === 'backing-up') return '正在本地备份';
+        if (localDraftStatus?.phase === 'recovered') {
+          return '已恢复本地草稿 · 尚未云端保存';
+        }
+        return '已本地备份 · 尚未云端保存';
     }
   })();
+  const canRetry =
+    cloudSaveStatus?.phase === 'retry-wait' ||
+    (cloudSaveStatus?.phase === 'failed' && cloudSaveStatus.canRetry);
 
   return (
     <main
@@ -403,8 +474,15 @@ function EditorWorkspaceContent({
           <span className={styles.eyebrow}>固定测试简历</span>
           <strong>{resume.title}</strong>
         </div>
-        <div aria-live="polite" className={styles.saveStateGroup} role="status">
-          <span className={styles.saveState}>{saveLabel}</span>
+        <div className={styles.saveStateGroup}>
+          <span aria-live="polite" className={styles.saveState} role="status">
+            {saveLabel}
+          </span>
+          {canRetry ? (
+            <button className={styles.retryButton} onClick={() => void onRetrySave()} type="button">
+              {cloudSaveStatus.phase === 'retry-wait' ? '立即重试' : '重新保存'}
+            </button>
+          ) : null}
           {localDraftStatus?.phase === 'error' && isDirty ? (
             <button className={styles.rescueButton} onClick={onExportRescue} type="button">
               导出救援副本
@@ -491,6 +569,7 @@ function EditorWorkspaceContent({
               <input
                 onBlur={() => {
                   endHistoryGroup(`section-title:${selectedSection.id}`);
+                  void onFlushSave();
                 }}
                 onChange={(event) =>
                   dispatch({

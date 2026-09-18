@@ -3,6 +3,7 @@ import type { ResumeDocumentV1 } from '@resume/domain/resume';
 import type { ResumeEditorStore } from '../store';
 import {
   LocalDraftUnavailableError,
+  type AcknowledgePendingInput,
   type LocalDraftFailureReason,
   type LocalDraftRepository,
 } from './local-draft-repository';
@@ -12,6 +13,7 @@ import {
   type LocalDraftRecord,
   type LocalDraftRescueExport,
   type LocalDraftScope,
+  type PendingSaveEnvelope,
 } from './local-draft-schema';
 
 export type LocalDraftPhase = 'initializing' | 'backing-up' | 'backed-up' | 'recovered' | 'error';
@@ -67,6 +69,7 @@ export class LocalDraftController {
   #unsubscribe: (() => void) | null = null;
   #disposed = false;
   #started = false;
+  #writeQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: LocalDraftControllerOptions) {
     this.#debounceMs = options.debounceMs ?? 200;
@@ -156,11 +159,19 @@ export class LocalDraftController {
   }
 
   async #persistCurrent(): Promise<void> {
-    const record = this.#currentRecord();
-    await this.options.repository.put(record);
-    if (!this.#disposed) {
-      this.options.onStatus({ phase: 'backed-up', updatedAt: record.updatedAt });
-    }
+    await this.#enqueueWrite(async () => {
+      const record = this.#currentRecord();
+      await this.options.repository.put(record);
+      if (!this.#disposed) {
+        this.options.onStatus({ phase: 'backed-up', updatedAt: record.updatedAt });
+      }
+    });
+  }
+
+  #enqueueWrite(work: () => Promise<void>): Promise<void> {
+    const result = this.#writeQueue.then(work, work);
+    this.#writeQueue = result.catch(() => undefined);
+    return result;
   }
 
   async flush(): Promise<void> {
@@ -187,6 +198,78 @@ export class LocalDraftController {
     return JSON.stringify(payload, null, 2);
   }
 
+  getPendingEnvelope(): PendingSaveEnvelope | null {
+    return this.#pendingEnvelope;
+  }
+
+  async freezePending(envelope: PendingSaveEnvelope): Promise<void> {
+    const current = this.#pendingEnvelope;
+    if (current && current.idempotencyKey !== envelope.idempotencyKey) {
+      throw new Error('已有未确认保存信封，不能创建第二个信封');
+    }
+    this.#pendingEnvelope = envelope;
+    if (this.options.initialError) return;
+    try {
+      await this.#enqueueWrite(() =>
+        this.options.repository.setPending(this.options.scope, envelope),
+      );
+    } catch (error) {
+      this.#reportError(error);
+      throw error;
+    }
+  }
+
+  async acknowledgePending(
+    input: Omit<AcknowledgePendingInput, 'workingSnapshot' | 'localSeq'>,
+  ): Promise<boolean> {
+    const pending = this.#pendingEnvelope;
+    if (
+      !pending ||
+      pending.idempotencyKey !== input.idempotencyKey ||
+      pending.clientSeq !== input.clientSeq
+    ) {
+      return false;
+    }
+
+    if (!this.options.initialError) {
+      try {
+        await this.#enqueueWrite(async () => {
+          const state = this.options.store.getState();
+          const persisted = await this.options.repository.acknowledgePending(this.options.scope, {
+            ...input,
+            workingSnapshot: state.document,
+            localSeq: state.localSeq,
+          });
+          if (!persisted) throw new LocalDraftUnavailableError('corrupt');
+        });
+      } catch (error) {
+        this.#reportError(error);
+      }
+    }
+
+    this.#baseRevision = input.revision;
+    this.#baseSnapshot = input.baseSnapshot;
+    this.#pendingEnvelope = null;
+    return this.options.store.getState().acknowledge({
+      clientSeq: input.clientSeq,
+      revision: input.revision,
+    });
+  }
+
+  async discardPending(idempotencyKey: string): Promise<boolean> {
+    if (this.#pendingEnvelope?.idempotencyKey !== idempotencyKey) return false;
+    this.#pendingEnvelope = null;
+    if (this.options.initialError) return true;
+    try {
+      return await this.#enqueueWrite(async () => {
+        await this.options.repository.discardPending(this.options.scope, idempotencyKey);
+      }).then(() => true);
+    } catch (error) {
+      this.#reportError(error);
+      return true;
+    }
+  }
+
   #reportError(error: unknown): void {
     const mapped =
       error instanceof LocalDraftUnavailableError
@@ -208,7 +291,7 @@ export class LocalDraftController {
     }
     try {
       if (!this.options.initialError) {
-        await this.options.repository.put(this.#currentRecord());
+        await this.#enqueueWrite(() => this.options.repository.put(this.#currentRecord()));
       }
     } catch {
       // 页面退出时只做尽力写入，不能把异步异常冒泡为未处理拒绝。

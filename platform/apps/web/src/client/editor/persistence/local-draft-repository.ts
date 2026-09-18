@@ -49,12 +49,15 @@ export interface AcknowledgePendingInput {
   revision: string;
   clientSeq: number;
   baseSnapshot: ResumeDocumentV1;
+  workingSnapshot: ResumeDocumentV1;
+  localSeq: number;
 }
 
 export interface LocalDraftRepository {
   get(scope: LocalDraftScope): Promise<LocalDraftRecord | null>;
   put(record: LocalDraftRecord): Promise<void>;
   setPending(scope: LocalDraftScope, envelope: PendingSaveEnvelope): Promise<void>;
+  discardPending(scope: LocalDraftScope, idempotencyKey: string): Promise<boolean>;
   acknowledgePending(scope: LocalDraftScope, input: AcknowledgePendingInput): Promise<boolean>;
   exportAccountRescue(userId: string): Promise<string>;
   clearAccount(userId: string, options?: ClearAccountOptions): Promise<number>;
@@ -198,7 +201,32 @@ export class DexieLocalDraftRepository implements LocalDraftRepository {
             ...current,
             baseRevision: input.revision,
             baseSnapshot: input.baseSnapshot,
+            workingSnapshot: input.workingSnapshot,
+            localSeq: input.localSeq,
             ackedSeq: input.clientSeq,
+            pendingEnvelope: null,
+            updatedAt: this.now().toISOString(),
+          }),
+        );
+        return true;
+      }),
+    );
+  }
+
+  async discardPending(scope: LocalDraftScope, idempotencyKey: string): Promise<boolean> {
+    const parsedScope = parseLocalDraftScope(scope);
+    return this.#run(() =>
+      this.#database.transaction('rw', this.#database.drafts, async () => {
+        const current = await this.#database.drafts.get([
+          parsedScope.userId,
+          parsedScope.resumeId,
+          parsedScope.tabId,
+        ]);
+        if (!current?.pendingEnvelope) return false;
+        if (current.pendingEnvelope.idempotencyKey !== idempotencyKey) return false;
+        await this.#database.drafts.put(
+          parseLocalDraftRecord({
+            ...current,
             pendingEnvelope: null,
             updatedAt: this.now().toISOString(),
           }),
