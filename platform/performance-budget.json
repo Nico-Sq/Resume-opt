@@ -1,13 +1,44 @@
 {
-  "status": "provisional",
-  "editor": {
-    "inputToPreviewP95Ms": 100,
-    "saveRequestP95Ms": 500,
-    "initialRouteJavaScriptKbGzip": 250
-  },
-  "approval": {
-    "requiredAfterFirstBenchmark": true,
-    "approvedBy": null,
-    "approvedAt": null
+  "schemaVersion": 1,
+  "productVersion": "V0.1",
+  "status": "engineering-baseline",
+  "description": "内部工程验收基线，不是对外 SLA；浏览器与保存 API 指标必须由对应环境报告验证。",
+  "metrics": {
+    "rendererProjection": {
+      "unit": "ms",
+      "minimumSamples": 50,
+      "p95Max": 100
+    },
+    "pagination": {
+      "unit": "ms",
+      "minimumSamples": 50,
+      "p95Max": 500
+    },
+    "fieldToPreview": {
+      "unit": "ms",
+      "minimumSamples": 50,
+      "p95Max": 100,
+      "requires": "desktop-chromium"
+    },
+    "localDraftCommit": {
+      "unit": "ms",
+      "minimumSamples": 50,
+      "p95Max": 400,
+      "requires": "indexeddb-browser"
+    },
+    "saveApi": {
+      "unit": "ms",
+      "minimumSamples": 300,
+      "p95Max": 500,
+      "p99Max": 1000,
+      "unexpectedFailureRateMax": 0.001,
+      "requires": "isolated-perf-environment"
+    },
+    "inputToCloudAck": {
+      "unit": "ms",
+      "minimumSamples": 50,
+      "p95Max": 2000,
+      "requires": "reference-network-rtt-lte-100ms"
+    }
   }
 }

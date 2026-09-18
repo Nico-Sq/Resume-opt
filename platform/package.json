@@ -23,6 +23,7 @@
     "test:migrations": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run tests/integration/migrations.test.ts",
     "test:unit": "vitest run --dir tests/unit",
     "test:integration": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --dir tests/integration",
+    "perf:baseline": "tsx scripts/performance/renderer-baseline.ts --environment local --budget performance-budget.json",
     "ci:fast": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries:check && pnpm contracts:check && pnpm test:unit",
     "test:save": "pnpm --filter @resume/save-reliability test",
     "test:save:unit": "pnpm --filter @resume/save-reliability test:unit",

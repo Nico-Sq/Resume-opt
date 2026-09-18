@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "fixtures": [
+    {
+      "id": "renderer-standard-v1",
+      "generator": "scripts/performance/renderer-baseline.ts#createSyntheticBoundaryDocument",
+      "locale": "zh-CN",
+      "moduleCount": 20,
+      "entryCount": 100,
+      "traits": ["中文标点", "emoji", "组合字符", "长要点", "空自定义模块", "A4多页"],
+      "containsRealUserData": false
+    }
+  ]
+}
