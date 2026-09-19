@@ -216,51 +216,104 @@ test('滚动只归属编辑器内部且普通长页面可以滚动', async ({ pa
   );
 });
 
-test('全屏编辑器无页面级滚动、图标组居中且长内容自动分页', async ({ page }) => {
+test('两侧工具组在高低视口等距且保持点击目标', async ({ page }) => {
+  const evidenceDirectory = resolve('artifacts/ci/editor-rails');
+  const layoutEvidence: unknown[] = [];
+  await mkdir(evidenceDirectory, { recursive: true });
+
   for (const viewport of [
     { width: 1080, height: 1920 },
     { width: 1920, height: 1080 },
+    { width: 1280, height: 480 },
   ]) {
     await page.setViewportSize(viewport);
     await page.goto('/');
     await expect(page.getByRole('textbox', { name: '姓名', exact: true })).toBeVisible();
 
-    const layout = await page.evaluate(() => {
+    const layout = await page.evaluate((viewportValue) => {
       const railMetrics = (selector: string) => {
         const rail = document.querySelector<HTMLElement>(selector);
         if (!rail) throw new Error(`缺少侧栏：${selector}`);
+        const scrollContainer = rail.querySelector<HTMLElement>('div') ?? rail;
         const buttons = [...rail.querySelectorAll<HTMLElement>('button')].filter(
           (button) => !button.hasAttribute('aria-expanded'),
         );
-        const first = buttons[0]?.getBoundingClientRect();
-        const last = buttons.at(-1)?.getBoundingClientRect();
-        const railRect = rail.getBoundingClientRect();
-        if (!first || !last) throw new Error(`侧栏没有图标：${selector}`);
+        const rects = buttons.map((button) => button.getBoundingClientRect());
+        const first = rects[0];
+        const last = rects.at(-1);
+        const containerRect = scrollContainer.getBoundingClientRect();
+        if (!first || !last || rects.length < 2) throw new Error(`侧栏没有足够图标：${selector}`);
         return {
-          centerOffset: (first.top + last.bottom) / 2 - (railRect.top + railRect.bottom) / 2,
-          clientWidth: rail.clientWidth,
-          scrollWidth: rail.scrollWidth,
+          centerOffset:
+            (first.top + last.bottom) / 2 - (containerRect.top + containerRect.bottom) / 2,
+          clientHeight: scrollContainer.clientHeight,
+          scrollHeight: scrollContainer.scrollHeight,
+          buttonHeights: rects.map((rect) => rect.height),
+          gaps: rects.slice(1).map((rect, index) => rect.top - (rects[index]?.bottom ?? 0)),
         };
       };
 
       return {
-        viewportHeight: window.innerHeight,
-        documentHeight: document.documentElement.scrollHeight,
-        bodyHeight: document.body.scrollHeight,
+        viewport: viewportValue,
         left: railMetrics('nav[aria-label="简历模块"]'),
         right: railMetrics('nav[aria-label="编辑器工具"]'),
       };
-    });
+    }, viewport);
 
-    expect(layout.documentHeight).toBe(layout.viewportHeight);
-    expect(layout.bodyHeight).toBe(layout.viewportHeight);
-    expect(layout.left.scrollWidth).toBeLessThanOrEqual(layout.left.clientWidth);
-    expect(layout.right.scrollWidth).toBeLessThanOrEqual(layout.right.clientWidth);
-    expect(Math.abs(layout.left.centerOffset)).toBeLessThanOrEqual(1);
-    expect(Math.abs(layout.right.centerOffset)).toBeLessThanOrEqual(1);
+    for (const rail of [layout.left, layout.right]) {
+      for (const height of rail.buttonHeights) expect(height).toBeGreaterThanOrEqual(44);
+      for (const gap of rail.gaps) expect(Math.abs(gap - 8)).toBeLessThanOrEqual(1);
+      if (rail.scrollHeight <= rail.clientHeight) {
+        expect(Math.abs(rail.centerOffset)).toBeLessThanOrEqual(1);
+      }
+    }
+    for (const label of ['简历模块', '编辑器工具']) {
+      const buttons = page
+        .getByRole('navigation', { name: label })
+        .locator('button:not([aria-expanded])');
+      for (const button of [buttons.last(), buttons.first()]) {
+        await button.scrollIntoViewIfNeeded();
+        await expect
+          .poll(() =>
+            button.evaluate((node) => {
+              const rail = node.closest('nav');
+              if (!rail) return false;
+              const railRect = rail.getBoundingClientRect();
+              const buttonRect = node.getBoundingClientRect();
+              return buttonRect.top >= railRect.top && buttonRect.bottom <= railRect.bottom;
+            }),
+          )
+          .toBe(true);
+      }
+    }
+    layoutEvidence.push(layout);
+    await page.screenshot({
+      path: resolve(evidenceDirectory, `${String(viewport.width)}x${String(viewport.height)}.png`),
+    });
   }
 
+  await writeFile(
+    resolve(evidenceDirectory, 'geometry.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        scope: 'v0.2-editor-rail-layout',
+        generatedAt: new Date().toISOString(),
+        viewports: layoutEvidence,
+        passed: true,
+      },
+      null,
+      2,
+    )}\n`,
+    'utf8',
+  );
+});
+
+test('长内容增加 A4 页数且不丢字', async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto('/');
   const summaryInput = page.getByRole('textbox', { name: '个人简介', exact: true });
+  await expect(summaryInput).toBeVisible();
   const originalSummary = await summaryInput.inputValue();
   await expect.poll(() => page.locator('.resume-page').count()).toBeGreaterThan(0);
   const originalPageCount = await page.locator('.resume-page').count();

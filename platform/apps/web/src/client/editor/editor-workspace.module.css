@@ -935,6 +935,7 @@ button:focus-visible {
 .railItems button,
 .rightRail button {
   position: relative;
+  flex: 0 0 44px;
   width: 44px;
   height: 44px;
   border-radius: 5px;
