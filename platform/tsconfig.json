@@ -7,7 +7,9 @@
     "tests/**/*.d.ts",
     "tests/integration/**/*.ts",
     "tests/integration/**/*.tsx",
+    "tests/browser/**/*.ts",
     "vitest.config.ts",
+    "playwright.config.ts",
     "scripts/**/*.ts",
     "scripts/**/*.mjs"
   ]

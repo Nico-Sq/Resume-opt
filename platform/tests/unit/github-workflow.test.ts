@@ -38,6 +38,9 @@ describe('GitHub verification workflow', () => {
     expect(workflow).toContain('pnpm ops:restore:native');
     expect(workflow).toContain('PG_NATIVE_RESTORE_MODE: docker');
     expect(workflow).toContain('${{ job.services.postgres.id }}');
+    expect(workflow).toContain('pnpm db:seed:dev');
+    expect(workflow).toContain('pnpm test:browser');
+    expect(workflow).toContain('PLAYWRIGHT_CHANNEL: chrome');
   });
 
   it('runs every full-gate phase and labels CI performance evidence correctly', async () => {
@@ -54,5 +57,6 @@ describe('GitHub verification workflow', () => {
     expect(fullGate).toContain('--environment ci');
     expect(fullGate).toContain('pnpm ops:restore:rehearse');
     expect(fullGate).toContain('pnpm build');
+    expect(packageJson.scripts['test:browser']).toContain('playwright test');
   });
 });

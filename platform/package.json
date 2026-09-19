@@ -27,6 +27,7 @@
     "test:migrations": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run tests/integration/migrations.test.ts",
     "test:unit": "vitest run --dir tests/unit",
     "test:integration": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --dir tests/integration",
+    "test:browser": "playwright test --config playwright.config.ts",
     "perf:baseline": "tsx scripts/performance/renderer-baseline.ts --budget performance-budget.json",
     "ci:fast": "pnpm typegen && pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries:check && pnpm contracts:check && pnpm test:unit",
     "ci:provision": "tsx scripts/ci/provision-ephemeral-postgres.ts",
@@ -37,6 +38,7 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
+    "@playwright/test": "1.63.0",
     "@resume/application": "workspace:*",
     "@resume/config": "workspace:*",
     "@resume/domain": "workspace:*",

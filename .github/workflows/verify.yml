@@ -71,6 +71,27 @@ jobs:
       - name: Run complete V0.1 verification gate
         run: pnpm ci:full
 
+      - name: Prepare fixed browser-test fixture
+        env:
+          APP_ENV: local
+          AUTH_MODE: fixed
+          DEV_FIXED_USER_ID: 00000000-0000-4000-8000-000000000001
+          DEV_FIXED_RESUME_ID: 00000000-0000-4000-8000-000000000002
+          DEV_FIXED_VERSION_ID: 00000000-0000-4000-8000-000000000003
+        run: |
+          pnpm db:migrate
+          pnpm db:seed:dev
+
+      - name: Verify native Chrome IndexedDB recovery
+        env:
+          APP_ENV: local
+          AUTH_MODE: fixed
+          DEV_FIXED_USER_ID: 00000000-0000-4000-8000-000000000001
+          DEV_FIXED_RESUME_ID: 00000000-0000-4000-8000-000000000002
+          DEV_FIXED_VERSION_ID: 00000000-0000-4000-8000-000000000003
+          PLAYWRIGHT_CHANNEL: chrome
+        run: pnpm test:browser
+
       - name: Rehearse native pg_dump and pg_restore
         env:
           PG_NATIVE_RESTORE_MODE: docker
