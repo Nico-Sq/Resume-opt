@@ -17,7 +17,7 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 15_000 },
   outputDir: 'artifacts/playwright',
-  reporter: [['line']],
+  reporter: process.env.CI ? [['github'], ['line']] : [['line']],
   use: {
     baseURL: 'http://localhost:3000',
     browserName: 'chromium',

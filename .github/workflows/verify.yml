@@ -93,6 +93,7 @@ jobs:
         run: pnpm test:browser
 
       - name: Rehearse native pg_dump and pg_restore
+        if: always()
         env:
           PG_NATIVE_RESTORE_MODE: docker
           PG_NATIVE_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}

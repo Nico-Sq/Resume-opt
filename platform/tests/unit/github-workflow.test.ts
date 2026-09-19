@@ -36,6 +36,9 @@ describe('GitHub verification workflow', () => {
     expect(workflow).toContain('if: always()');
     expect(workflow).toContain('path: platform/artifacts/ci');
     expect(workflow).toContain('pnpm ops:restore:native');
+    expect(workflow).toContain(
+      '- name: Rehearse native pg_dump and pg_restore\n        if: always()',
+    );
     expect(workflow).toContain('PG_NATIVE_RESTORE_MODE: docker');
     expect(workflow).toContain('${{ job.services.postgres.id }}');
     expect(workflow).toContain('pnpm db:seed:dev');
