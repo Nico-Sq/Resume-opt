@@ -283,7 +283,7 @@ export class DexieLocalDraftRepository implements LocalDraftRepository {
   }
 
   close(): void {
-    this.#database.close();
+    this.#database.close({ disableAutoOpen: false });
   }
 }
 

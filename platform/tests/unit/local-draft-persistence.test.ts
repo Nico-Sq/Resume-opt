@@ -132,6 +132,17 @@ describe('Dexie local draft repository', () => {
     reopened.close();
   });
 
+  it('reopens the same repository instance after React development cleanup', async () => {
+    const repository = new DexieLocalDraftRepository(databaseName(), () => fixedNow);
+    const draftScope = scope();
+    await repository.put(record(draftScope));
+    repository.close();
+
+    await repository.put(record(draftScope, { localSeq: 1 }));
+    await expect(repository.get(draftScope)).resolves.toMatchObject({ localSeq: 1 });
+    repository.close();
+  });
+
   it('isolates records by account, resume and tab compound key', async () => {
     const name = databaseName();
     const repository = new DexieLocalDraftRepository(name, () => fixedNow);
