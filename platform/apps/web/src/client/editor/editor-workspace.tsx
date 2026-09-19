@@ -472,8 +472,6 @@ function EditorWorkspaceContent({
   const [compactLayout, setCompactLayout] = useState(false);
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('style');
   const [dismissedSavePhase, setDismissedSavePhase] = useState<string | null>(null);
-  const [overlay, setOverlay] = useState<'share' | 'export' | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState(resumeDocument.moduleOrder[0] ?? '');
   const [announcement, setAnnouncement] = useState('');
   const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
@@ -749,27 +747,6 @@ function EditorWorkspaceContent({
           >
             <EditorIcon name="redo" size={19} />
             <span>重做</span>
-          </button>
-          <button
-            aria-label="分享"
-            onClick={() => {
-              setLinkCopied(false);
-              setOverlay('share');
-            }}
-            title="分享"
-            type="button"
-          >
-            <EditorIcon name="share" size={19} />
-            <span>分享</span>
-          </button>
-          <button
-            className={styles.exportButton}
-            onClick={() => {
-              setOverlay('export');
-            }}
-            type="button"
-          >
-            导出 PDF
           </button>
         </div>
       </header>
@@ -1268,12 +1245,9 @@ function EditorWorkspaceContent({
           [
             ['style', 'template', '模板'],
             ['modules', 'modules', '模块'],
-            ['style', 'share', '分享'],
             ['style', 'typography', '排版'],
             ['style', 'design', '设计'],
             ['style', 'export', '页面'],
-            ['style', 'layout', 'AI 优化'],
-            ['style', 'diagnosis', 'JD 匹配'],
           ] as const
         ).map(([mode, icon, label]) => (
           <button
@@ -1352,185 +1326,6 @@ function EditorWorkspaceContent({
             ×
           </button>
         </section>
-      ) : null}
-      {overlay ? (
-        <div className={styles.actionOverlay}>
-          <section
-            aria-labelledby={`${overlay}-dialog-title`}
-            aria-modal="true"
-            className={styles.actionDialog}
-            role="dialog"
-          >
-            <header className={styles.actionDialogHeader}>
-              <EditorIcon name={overlay === 'share' ? 'share' : 'download'} size={36} />
-              <div>
-                <h2 id={`${overlay}-dialog-title`}>
-                  {overlay === 'share' ? '分享简历' : '导出 PDF'}
-                </h2>
-                <p>
-                  {overlay === 'share'
-                    ? '创建一个可随时关闭的只读链接'
-                    : '检查文件信息并生成可下载版本'}
-                </p>
-              </div>
-              <button
-                aria-label="关闭弹窗"
-                onClick={() => {
-                  setOverlay(null);
-                }}
-                type="button"
-              >
-                ×
-              </button>
-            </header>
-            {overlay === 'share' ? (
-              <div className={styles.shareDialogBody}>
-                <div className={styles.dialogSettingRow}>
-                  <div>
-                    <strong>开启分享链接</strong>
-                    <span>关闭后旧链接将立即失效</span>
-                  </div>
-                  <button
-                    aria-checked="true"
-                    className={styles.visibilitySwitch}
-                    role="switch"
-                    type="button"
-                  >
-                    <span />
-                  </button>
-                </div>
-                <div className={styles.dialogSettingRow}>
-                  <div>
-                    <strong>访问权限</strong>
-                    <span>访客无法修改原简历</span>
-                  </div>
-                  <b>只读预览</b>
-                </div>
-                <div className={styles.dialogSettingRow}>
-                  <div>
-                    <strong>链接有效期</strong>
-                  </div>
-                  <select defaultValue="7">
-                    <option value="7">7 天后失效</option>
-                  </select>
-                  <time>2026.09.25 23:59</time>
-                </div>
-                <div className={styles.dialogSettingRow}>
-                  <div>
-                    <strong>允许下载</strong>
-                    <span>访客可以下载当前 PDF 版本</span>
-                  </div>
-                  <button
-                    aria-checked="true"
-                    className={styles.visibilitySwitch}
-                    role="switch"
-                    type="button"
-                  >
-                    <span />
-                  </button>
-                </div>
-                <label className={styles.shareLinkField}>
-                  <span>分享链接</span>
-                  <div>
-                    <input readOnly value="https://resume.example/s/7HF2K9" />
-                    <button
-                      onClick={() => {
-                        setLinkCopied(true);
-                      }}
-                      type="button"
-                    >
-                      复制链接
-                    </button>
-                  </div>
-                  <small>{linkCopied ? '已复制' : '链接仅包含当前已保存版本'}</small>
-                </label>
-                <div className={styles.dialogInfo}>任何获得链接的人都可以查看，请谨慎分享</div>
-              </div>
-            ) : (
-              <div className={styles.exportDialogBody}>
-                <label>
-                  <span>文件名称</span>
-                  <div>
-                    <input defaultValue="张三-前端开发工程师.pdf" />
-                    <b>● 名称有效</b>
-                  </div>
-                </label>
-                <div className={styles.exportGrid}>
-                  <label>
-                    <span>文件格式</span>
-                    <select defaultValue="pdf">
-                      <option value="pdf">PDF</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>当前页数</span>
-                    <input readOnly value="1 页" />
-                  </label>
-                </div>
-                <div className={styles.exportCheck}>
-                  <strong>分页检查结果</strong>
-                  <span>✓ 检查通过</span>
-                  <small>未发现内容截切、空白页或异常分页</small>
-                </div>
-                <div className={styles.exportCheck}>
-                  <strong>用户权益状态</strong>
-                  <span>♕ 专业版 · 可导出</span>
-                  <small>本月剩余 8 次 PDF 导出</small>
-                </div>
-                <div className={styles.exportChecklist}>
-                  <strong>导出前检查</strong>
-                  <div>
-                    ✓ 中文字体已嵌入
-                    <br />✓ 页面尺寸为 A4
-                    <br />✓ 预览与导出内容一致
-                  </div>
-                </div>
-                <div className={styles.exportFailure}>
-                  <span>!</span>
-                  <div>
-                    <strong>生成失败</strong>
-                    <p>中文字体嵌入超时，未生成可下载文件。额度未扣减。</p>
-                  </div>
-                  <button type="button">重试</button>
-                </div>
-              </div>
-            )}
-            <footer className={styles.actionDialogFooter} data-kind={overlay}>
-              {overlay === 'share' ? (
-                <button type="button">关闭分享</button>
-              ) : (
-                <button
-                  onClick={() => {
-                    setOverlay(null);
-                  }}
-                  type="button"
-                >
-                  取消
-                </button>
-              )}
-              <span />
-              {overlay === 'share' ? (
-                <button
-                  onClick={() => {
-                    setOverlay(null);
-                  }}
-                  type="button"
-                >
-                  取消
-                </button>
-              ) : null}
-              <button
-                className={styles.primaryButton}
-                onClick={() => {
-                  setOverlay(null);
-                }}
-                type="button"
-              >
-                {overlay === 'share' ? '完成' : '生成 PDF'}
-              </button>
-            </footer>
-          </section>
-        </div>
       ) : null}
       {conflictOpen && conflictView.status === 'ready' ? (
         <ConflictDialog

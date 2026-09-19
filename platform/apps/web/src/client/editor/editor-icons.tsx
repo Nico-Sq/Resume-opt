@@ -9,13 +9,10 @@ export type EditorIconName =
   | 'chevron-left'
   | 'chevron-right'
   | 'design'
-  | 'diagnosis'
-  | 'download'
   | 'education'
   | 'export'
   | 'intent'
   | 'internship'
-  | 'layout'
   | 'modules'
   | 'more'
   | 'pencil'
@@ -23,7 +20,6 @@ export type EditorIconName =
   | 'project'
   | 'redo'
   | 'self-evaluation'
-  | 'share'
   | 'skills'
   | 'sort'
   | 'summary'
@@ -85,16 +81,6 @@ export function EditorIcon({
           <path d="m15 7 4 4-4 4m4-4h-8a6 6 0 0 0-6 6" {...stroke} />
         </svg>
       );
-    case 'share':
-      return (
-        <svg {...common}>
-          <circle cx="18" cy="5" r="2" {...stroke} />
-          <circle cx="6" cy="12" r="2" {...stroke} />
-          <circle cx="18" cy="19" r="2" {...stroke} />
-          <path d="m8 11 8-5M8 13l8 5" {...stroke} />
-        </svg>
-      );
-    case 'download':
     case 'export':
       return (
         <svg {...common}>
@@ -121,7 +107,6 @@ export function EditorIcon({
         </svg>
       );
     case 'intent':
-    case 'diagnosis':
       return (
         <svg {...common}>
           <circle cx="12" cy="12" r="8" {...stroke} />
@@ -190,13 +175,6 @@ export function EditorIcon({
           <rect height="6" rx="1" width="6" x="15" y="3" {...stroke} />
           <rect height="6" rx="1" width="6" x="3" y="15" {...stroke} />
           <rect height="6" rx="1" width="6" x="15" y="15" {...stroke} />
-        </svg>
-      );
-    case 'layout':
-      return (
-        <svg {...common}>
-          <rect height="16" rx="1.5" width="18" x="3" y="4" {...stroke} />
-          <path d="M9 4v16m0-10h12" {...stroke} />
         </svg>
       );
     case 'typography':

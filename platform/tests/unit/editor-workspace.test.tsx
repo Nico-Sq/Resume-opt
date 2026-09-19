@@ -12,12 +12,13 @@ import {
 } from '@resume/domain/resume';
 import { EditorWorkspace } from '../../apps/web/src/client/editor/editor-workspace';
 import type { ConflictSnapshotTransport } from '../../apps/web/src/client/editor/conflict';
-import type {
-  AcknowledgePendingInput,
-  LocalDraftRecord,
-  LocalDraftRepository,
-  LocalDraftScope,
-  PendingSaveEnvelope,
+import {
+  LocalDraftUnavailableError,
+  type AcknowledgePendingInput,
+  type LocalDraftRecord,
+  type LocalDraftRepository,
+  type LocalDraftScope,
+  type PendingSaveEnvelope,
 } from '../../apps/web/src/client/editor/persistence';
 import { SaveTransportError, type SaveTransport } from '../../apps/web/src/client/editor/saving';
 import { createResumeEditorStore } from '../../apps/web/src/client/editor/store';
@@ -248,22 +249,42 @@ describe('editor workspace module management', () => {
     ).toBe('false');
   });
 
-  it('opens real share and export overlays from the prototype toolbar', async () => {
-    const user = userEvent.setup();
+  it('omits future feature entries while keeping real editor and rescue controls', async () => {
     const { resume, store } = createFixture();
-    render(<EditorWorkspace initialResume={resume} store={store} />);
+    store.getState().hydrateWorkingCopy({
+      document: resume.document,
+      localSeq: 1,
+      ackedSeq: 0,
+      ackRevision: resume.revision,
+    });
+    const repository = new MemoryLocalDraftRepository();
+    const scope = { userId: randomUUID(), resumeId: resume.id, tabId: randomUUID() };
+    render(
+      <EditorWorkspace
+        initialResume={resume}
+        localDraft={{
+          repository,
+          scope,
+          initialRecord: null,
+          initialError: new LocalDraftUnavailableError('quota'),
+        }}
+        store={store}
+      />,
+    );
 
-    const toolbar = screen.getAllByRole('banner')[0];
-    if (!toolbar) throw new Error('缺少编辑器顶部工具栏');
-    await user.click(within(toolbar).getByRole('button', { name: /^分享$/u }));
-    const shareDialog = screen.getByRole('dialog', { name: '分享简历' });
-    expect(within(shareDialog).getByDisplayValue(/resume\.example/)).toBeInstanceOf(HTMLElement);
-    await user.click(within(shareDialog).getByRole('button', { name: '完成' }));
-
-    await user.click(screen.getByRole('button', { name: '导出 PDF' }));
-    const exportDialog = screen.getByRole('dialog', { name: '导出 PDF' });
-    expect(within(exportDialog).getByText('生成失败')).toBeInstanceOf(HTMLElement);
-    expect(within(exportDialog).getByText(/额度未扣减/)).toBeInstanceOf(HTMLElement);
+    for (const name of ['分享', '导出 PDF', 'AI 优化', 'JD 匹配']) {
+      expect(screen.queryAllByRole('button', { name })).toHaveLength(0);
+    }
+    expect(screen.queryByText(/resume\.example/u)).toBeNull();
+    expect(screen.queryByText(/本月剩余.*PDF/u)).toBeNull();
+    for (const name of ['模板', '模块', '排版', '设计', '页面']) {
+      expect(screen.getByRole('button', { name })).toBeInstanceOf(HTMLElement);
+    }
+    expect(screen.getByRole('textbox', { name: '姓名' })).toBeInstanceOf(HTMLElement);
+    expect(screen.getByRole('region', { name: 'A4 简历预览' })).toBeInstanceOf(HTMLElement);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '导出救援副本' })).toBeInstanceOf(HTMLElement);
+    });
   });
 
   it('flushes on field blur and reports cloud ACK separately from local backup', async () => {
