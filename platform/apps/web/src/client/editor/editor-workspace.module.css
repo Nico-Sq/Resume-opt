@@ -1706,6 +1706,30 @@ button:focus-visible {
   }
 }
 
+@media (max-width: 800px) {
+  .editorShell {
+    --rail-width: 48px;
+    --left-panel-width: calc(100vw - 2 * var(--rail-width));
+    --right-panel-width: calc(100vw - 2 * var(--rail-width));
+    grid-template-columns:
+      var(--rail-width) var(--left-panel-width) minmax(0, 1fr) var(--right-panel-width)
+      var(--rail-width);
+  }
+  .editorShell.leftCollapsed {
+    grid-template-columns: var(--rail-width) 0 minmax(0, 1fr) var(--right-panel-width) var(
+        --rail-width
+      );
+  }
+  .editorShell.rightCollapsed {
+    grid-template-columns: var(--rail-width) var(--left-panel-width) minmax(0, 1fr) 0 var(
+        --rail-width
+      );
+  }
+  .editorShell.leftCollapsed.rightCollapsed {
+    grid-template-columns: var(--rail-width) 0 minmax(0, 1fr) 0 var(--rail-width);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .visibilitySwitch span {
     transition: none;

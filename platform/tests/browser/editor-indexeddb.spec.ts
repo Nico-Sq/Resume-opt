@@ -104,6 +104,118 @@ async function updateNameAndMeasure(nameInput: Locator, name: string): Promise<B
   };
 }
 
+test('滚动只归属编辑器内部且普通长页面可以滚动', async ({ page }) => {
+  const viewports = [
+    { width: 1920, height: 1080 },
+    { width: 1440, height: 900 },
+    { width: 1366, height: 768 },
+    { width: 1280, height: 720 },
+    { width: 1024, height: 768 },
+    { width: 390, height: 844 },
+  ];
+  const evidenceDirectory = resolve('artifacts/ci/editor-layout');
+  const layoutEvidence: unknown[] = [];
+  await mkdir(evidenceDirectory, { recursive: true });
+
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    if (viewport.width <= 800) {
+      await expect(page.locator('aside[aria-label="内容编辑"]')).toBeHidden();
+      await page.getByRole('button', { name: '基本信息', exact: true }).click();
+    }
+
+    const lastField = page.getByRole('textbox', { name: '个人简介', exact: true });
+    await expect(lastField).toBeVisible();
+    await lastField.scrollIntoViewIfNeeded();
+    const geometry = await page.evaluate(() => {
+      const shell = document.querySelector<HTMLElement>('main');
+      const panel = document.querySelector<HTMLElement>('aside[aria-label="内容编辑"]');
+      const field = panel?.querySelector<HTMLElement>('textarea');
+      if (!shell || !panel || !field) throw new Error('缺少编辑器滚动几何节点');
+      const panelRect = panel.getBoundingClientRect();
+      const fieldRect = field.getBoundingClientRect();
+      const result = {
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        document: {
+          clientWidth: document.documentElement.clientWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+          clientHeight: document.documentElement.clientHeight,
+          scrollHeight: document.documentElement.scrollHeight,
+        },
+        body: {
+          clientHeight: document.body.clientHeight,
+          scrollHeight: document.body.scrollHeight,
+        },
+        shell: { clientWidth: shell.clientWidth, scrollWidth: shell.scrollWidth },
+        panel: { top: panelRect.top, bottom: panelRect.bottom },
+        lastField: { top: fieldRect.top, bottom: fieldRect.bottom },
+      };
+      return {
+        ...result,
+        rootScrollLock: {
+          bodyOverflowY: getComputedStyle(document.body).overflowY,
+          htmlOverflowY: getComputedStyle(document.documentElement).overflowY,
+        },
+      };
+    });
+
+    layoutEvidence.push(geometry);
+    await page.screenshot({
+      path: resolve(evidenceDirectory, `${String(viewport.width)}x${String(viewport.height)}.png`),
+    });
+    expect(geometry.document.scrollWidth).toBe(geometry.document.clientWidth);
+    expect(geometry.rootScrollLock.bodyOverflowY).toBe('hidden');
+    expect(geometry.rootScrollLock.htmlOverflowY).toBe('hidden');
+    expect(geometry.shell.scrollWidth).toBeLessThanOrEqual(geometry.shell.clientWidth);
+    expect(geometry.lastField.top).toBeGreaterThanOrEqual(geometry.panel.top);
+    expect(geometry.lastField.bottom).toBeLessThanOrEqual(geometry.panel.bottom);
+    await page.mouse.move(8, 8);
+    await page.mouse.wheel(0, 1_000);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  }
+
+  await page.evaluate(() => {
+    document.body.innerHTML =
+      '<main id="ordinary-long-page" style="height: 200vh">普通长页面</main>';
+  });
+  const ordinaryPage = await page.evaluate(async () => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    await new Promise<void>((resolveFrame) =>
+      requestAnimationFrame(() => {
+        resolveFrame();
+      }),
+    );
+    return {
+      bodyOverflowY: getComputedStyle(document.body).overflowY,
+      htmlOverflowY: getComputedStyle(document.documentElement).overflowY,
+      clientHeight: document.documentElement.clientHeight,
+      scrollHeight: document.documentElement.scrollHeight,
+      scrollY: window.scrollY,
+    };
+  });
+  expect(ordinaryPage.bodyOverflowY).not.toBe('hidden');
+  expect(ordinaryPage.htmlOverflowY).not.toBe('hidden');
+  expect(ordinaryPage.scrollHeight).toBeGreaterThan(ordinaryPage.clientHeight);
+  expect(ordinaryPage.scrollY).toBeGreaterThan(0);
+  await writeFile(
+    resolve(evidenceDirectory, 'geometry.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        scope: 'v0.2-editor-scroll-ownership',
+        generatedAt: new Date().toISOString(),
+        viewports: layoutEvidence,
+        ordinaryPage,
+        passed: true,
+      },
+      null,
+      2,
+    )}\n`,
+    'utf8',
+  );
+});
+
 test('全屏编辑器无页面级滚动、图标组居中且长内容自动分页', async ({ page }) => {
   for (const viewport of [
     { width: 1080, height: 1920 },

@@ -469,6 +469,7 @@ function EditorWorkspaceContent({
   const endHistoryGroup = useResumeEditorStore((state) => state.endHistoryGroup);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
+  const [compactLayout, setCompactLayout] = useState(false);
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('style');
   const [dismissedSavePhase, setDismissedSavePhase] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<'share' | 'export' | null>(null);
@@ -478,6 +479,15 @@ function EditorWorkspaceContent({
   const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
   const [customTitle, setCustomTitle] = useState('');
   const actionRefs = useRef(new Map<string, HTMLButtonElement>());
+
+  const openLeftPanel = () => {
+    setLeftOpen(true);
+    if (compactLayout) setRightOpen(false);
+  };
+  const openRightPanel = () => {
+    setRightOpen(true);
+    if (compactLayout) setLeftOpen(false);
+  };
 
   const selectedSection = resumeDocument.sectionsById[selectedSectionId];
   const orderedSections = resumeDocument.moduleOrder.flatMap((id) => {
@@ -551,15 +561,24 @@ function EditorWorkspaceContent({
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return;
-    const media = window.matchMedia('(max-width: 1280px)');
+    const narrowMedia = window.matchMedia('(max-width: 1280px)');
+    const compactMedia = window.matchMedia('(max-width: 800px)');
     const collapseForViewport = () => {
-      if (media.matches) setRightOpen(false);
+      setCompactLayout(compactMedia.matches);
+      if (compactMedia.matches) {
+        setLeftOpen(false);
+        setRightOpen(false);
+      } else if (narrowMedia.matches) {
+        setRightOpen(false);
+      }
     };
     const timer = window.setTimeout(collapseForViewport, 0);
-    media.addEventListener('change', collapseForViewport);
+    narrowMedia.addEventListener('change', collapseForViewport);
+    compactMedia.addEventListener('change', collapseForViewport);
     return () => {
       window.clearTimeout(timer);
-      media.removeEventListener('change', collapseForViewport);
+      narrowMedia.removeEventListener('change', collapseForViewport);
+      compactMedia.removeEventListener('change', collapseForViewport);
     };
   }, []);
 
@@ -675,6 +694,7 @@ function EditorWorkspaceContent({
         !leftOpen && styles.leftCollapsed,
         !rightOpen && styles.rightCollapsed,
       )}
+      data-editor-shell
     >
       <header className={styles.topbar}>
         <div className={styles.topbarStart}>
@@ -765,7 +785,7 @@ function EditorWorkspaceContent({
               key={sectionValue.id}
               onClick={() => {
                 setSelectedSectionId(sectionValue.id);
-                setLeftOpen(true);
+                openLeftPanel();
               }}
               title={sectionValue.title}
               type="button"
@@ -780,7 +800,7 @@ function EditorWorkspaceContent({
             aria-label="展开内容面板"
             className={styles.railEdgeToggle}
             onClick={() => {
-              setLeftOpen(true);
+              openLeftPanel();
             }}
             title="展开内容编辑"
             type="button"
@@ -863,7 +883,7 @@ function EditorWorkspaceContent({
           <button
             onClick={() => {
               setRightPanelMode('modules');
-              setRightOpen(true);
+              openRightPanel();
             }}
             type="button"
           >
@@ -873,7 +893,7 @@ function EditorWorkspaceContent({
           <button
             onClick={() => {
               setRightPanelMode('sorting');
-              setRightOpen(true);
+              openRightPanel();
             }}
             type="button"
           >
@@ -1074,7 +1094,7 @@ function EditorWorkspaceContent({
                     className={styles.moduleName}
                     onClick={() => {
                       setSelectedSectionId(sectionValue.id);
-                      setLeftOpen(true);
+                      openLeftPanel();
                     }}
                     type="button"
                   >
@@ -1182,7 +1202,7 @@ function EditorWorkspaceContent({
                     className={styles.moduleName}
                     onClick={() => {
                       setSelectedSectionId(sectionValue.id);
-                      setLeftOpen(true);
+                      openLeftPanel();
                     }}
                     type="button"
                   >
@@ -1268,7 +1288,7 @@ function EditorWorkspaceContent({
             key={`${icon}-${label}`}
             onClick={() => {
               setRightPanelMode(mode);
-              setRightOpen(true);
+              openRightPanel();
             }}
             title={label}
             type="button"
@@ -1282,7 +1302,7 @@ function EditorWorkspaceContent({
             aria-label="展开模块布局设置"
             className={styles.railEdgeToggle}
             onClick={() => {
-              setRightOpen(true);
+              openRightPanel();
             }}
             title="展开设置面板"
             type="button"
