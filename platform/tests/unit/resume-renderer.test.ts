@@ -334,6 +334,9 @@ describe('A4 metrics, styles and external preview scale', () => {
     expect(RESUME_RENDERER_CSS).toContain('background: #fff');
     expect(RESUME_RENDERER_CSS).not.toContain('overflow: hidden');
     expect(RESUME_RENDERER_CSS).toContain('box-shadow: none');
+    expect(RESUME_RENDERER_CSS).toMatch(
+      /resume-measurement-surface[^}]*font-size: var\(--resume-body-size\)[^}]*line-height: var\(--resume-line-height\)/s,
+    );
     expect(variables).toMatchObject({
       '--resume-body-size': '10.5pt',
       '--resume-margin-top': '14mm',

@@ -317,15 +317,92 @@ test('长内容增加 A4 页数且不丢字', async ({ page }) => {
   const originalSummary = await summaryInput.inputValue();
   await expect.poll(() => page.locator('.resume-page').count()).toBeGreaterThan(0);
   const originalPageCount = await page.locator('.resume-page').count();
-  const longSummary = `分页起点${'负责复杂业务系统设计、交付与持续优化，确保关键结果可验证。'.repeat(100)}分页终点`;
+  const longSummary = `分页起点|${Array.from(
+    { length: 160 },
+    (_, index) => `片段${String(index).padStart(3, '0')}🙂é中文`,
+  ).join('|')}|分页终点`;
   try {
+    const startedAt = performance.now();
     await summaryInput.fill(longSummary);
     await expect
       .poll(() => page.locator('.resume-page').count())
       .toBeGreaterThan(originalPageCount);
-    await expect(page.getByRole('region', { name: 'A4 简历预览' })).toContainText('分页起点');
-    await expect(page.getByRole('region', { name: 'A4 简历预览' })).toContainText('分页终点');
+    const paginationUpdateMs = performance.now() - startedAt;
     await expect(page.getByText(/简历排版未完成/u)).toHaveCount(0);
+    const evidence = await page.evaluate((expectedText) => {
+      const paragraphs = [
+        ...document.querySelectorAll<HTMLElement>('.resume-page .resume-paragraph'),
+      ];
+      const combinedText = paragraphs.map((paragraph) => paragraph.textContent).join('');
+      const start = combinedText.indexOf('分页起点');
+      const end = combinedText.indexOf('分页终点', start) + '分页终点'.length;
+      const measurement = [
+        ...document.querySelectorAll<HTMLElement>('.resume-measurement-surface .resume-paragraph'),
+      ].find((element) => element.textContent.includes('分页起点'));
+      const rendered = paragraphs.find((element) => element.textContent.includes('分页起点'));
+      if (!measurement || !rendered || start < 0 || end < '分页终点'.length) {
+        throw new Error('缺少长文本分页测量或渲染节点');
+      }
+      const styles = (element: HTMLElement) => {
+        const style = getComputedStyle(element);
+        return {
+          fontFamily: style.fontFamily,
+          fontSize: style.fontSize,
+          lineHeight: style.lineHeight,
+          width: Number.parseFloat(style.width),
+        };
+      };
+      return {
+        pageCount: document.querySelectorAll('.resume-page').length,
+        reconstructedText: combinedText.slice(start, end),
+        startMarkerCount: combinedText.split('分页起点').length - 1,
+        endMarkerCount: combinedText.split('分页终点').length - 1,
+        expectedLength: expectedText.length,
+        measurementStyle: styles(measurement),
+        renderedStyle: styles(rendered),
+        pages: [...document.querySelectorAll<HTMLElement>('.resume-page')].map((resumePage) => ({
+          clientHeight: resumePage.clientHeight,
+          scrollHeight: resumePage.scrollHeight,
+        })),
+      };
+    }, longSummary);
+
+    expect(evidence.reconstructedText).toBe(longSummary);
+    expect(evidence.startMarkerCount).toBe(1);
+    expect(evidence.endMarkerCount).toBe(1);
+    expect(evidence.measurementStyle.fontFamily).toBe(evidence.renderedStyle.fontFamily);
+    expect(evidence.measurementStyle.fontSize).toBe(evidence.renderedStyle.fontSize);
+    expect(evidence.measurementStyle.lineHeight).toBe(evidence.renderedStyle.lineHeight);
+    expect(
+      Math.abs(evidence.measurementStyle.width - evidence.renderedStyle.width),
+    ).toBeLessThanOrEqual(0.5);
+    for (const pageGeometry of evidence.pages) {
+      expect(pageGeometry.scrollHeight).toBeLessThanOrEqual(pageGeometry.clientHeight + 1);
+    }
+    const evidenceDirectory = resolve('artifacts/ci/editor-pagination');
+    await mkdir(evidenceDirectory, { recursive: true });
+    await page.screenshot({ path: resolve(evidenceDirectory, 'long-content.png') });
+    await writeFile(
+      resolve(evidenceDirectory, 'pagination.json'),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          scope: 'v0.2-editor-dynamic-pagination',
+          generatedAt: new Date().toISOString(),
+          originalPageCount,
+          paginationUpdateMs: Number(paginationUpdateMs.toFixed(2)),
+          ...evidence,
+          reconstructedText: {
+            matches: evidence.reconstructedText === longSummary,
+            length: evidence.reconstructedText.length,
+          },
+          passed: true,
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    );
   } finally {
     await summaryInput.fill(originalSummary);
     await summaryInput.press('Tab');

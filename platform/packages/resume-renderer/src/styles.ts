@@ -3,7 +3,7 @@ import type { ResumeRenderModel } from './projector';
 export const RESUME_RENDERER_CSS = `
 @page { size: A4; margin: 0; }
 .resume-renderer { color: #171717; font-family: var(--resume-font-family); }
-.resume-renderer .resume-measurement-surface { position: absolute; left: -100000px; top: 0; width: var(--resume-content-width); visibility: hidden; }
+.resume-renderer .resume-measurement-surface { position: absolute; left: -100000px; top: 0; width: var(--resume-content-width); visibility: hidden; font-size: var(--resume-body-size); line-height: var(--resume-line-height); }
 .resume-renderer .resume-page {
   box-sizing: border-box;
   width: 210mm;
