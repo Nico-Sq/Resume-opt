@@ -39,7 +39,7 @@ test('preserves all 25 architecture chapters and version labels', () => {
     assert.equal(Number(match[1]), i + 1);
     assert.equal(match[2].trim(), expected[i]);
   });
-  assert.match(document, /文档版本 \| V0\.3，2026-09-17/);
+  assert.match(document, /文档版本 \| V0\.4，2026-09-19/);
 });
 
 test('summary remains within 500 characters', () => {
@@ -146,4 +146,61 @@ test('confirmed business decisions keep credits separate from membership', () =>
   assert.ok(document.includes('不是可直接启用生产收款的完整配置'));
   assert.ok(document.includes('不能实现无例外拒退'));
   assert.doesNotMatch(document, /邮箱验证成功后一次性赠送/);
+});
+
+const plan = readFileSync(resolve(root, 'v0.2-delivery-plan.md'), 'utf8');
+const product = readFileSync(resolve(root, 'product-design.md'), 'utf8');
+
+test('approved V0.2 scope is linked from every delivery entry point', () => {
+  assert.match(plan, /^# .*（已批准执行版）/);
+  for (const file of ['README.md', 'product-design.md', 'technical-selection.md',
+    'ux-interaction-spec.md', 'v0.1-delivery-plan.md', 'v0.2-delivery-plan.md']) {
+    const source = readFileSync(resolve(root, file), 'utf8');
+    if (file !== 'v0.2-delivery-plan.md') assert.ok(source.includes('(./v0.2-delivery-plan.md)'), file);
+    assert.doesNotMatch(source, /(?<![\w-])design\.md/, file);
+    for (const match of source.matchAll(/\]\((\.\/[^)#]+)(?:#[^)]*)?\)/g)) {
+      assert.ok(existsSync(resolve(root, match[1])), `${file}: ${match[1]}`);
+    }
+  }
+});
+
+test('product and technical roadmaps agree without assigning PDF or automatic AI credits', () => {
+  for (const source of [product, document]) {
+    const roadmap = source.split(/(?:## )?21\. /)[1].split(/(?:## )?22\. /)[0];
+    for (const [version, content] of [
+      ['V0.2', '公开多用户基础'], ['V0.3', '单项 AI 优化实验'],
+      ['V0.4', 'JD 导入与匹配报告'], ['V0.5', '证明用户价值后'],
+    ]) {
+      const row = roadmap.split('\n').find(line => line.startsWith(`| ${version} |`));
+      assert.ok(row?.includes(content), `${version}: ${content}`);
+    }
+    assert.match(roadmap, /PDF、导出、分享.*待重新排期/);
+    assert.doesNotMatch(roadmap, /^\| V0\.[2345] \|[^|]*(?:PDF|额度预占|额度账本|简历诊断)/m);
+  }
+  assert.match(document, /\| 创建\/编辑\/保存\/历史\/复制 \| 拒绝 \| 拒绝，403 EMAIL_NOT_VERIFIED/);
+  assert.match(document, /V0\.3 不自动包含额度账本/);
+  assert.doesNotMatch(document, /AI额度账本在V0\.3实现|注册赠额在V0\.3|下载本人简历（V0\.2实现后）|快照和恢复 API 从 V0\.1 起存在/);
+});
+
+test('V0.2 plan retains complete tasks and a valid prerequisite order', () => {
+  const chapters = [...plan.matchAll(/^## (\d+)\. /gm)].map(match => Number(match[1]));
+  assert.deepEqual(chapters, Array.from({ length: 27 }, (_, i) => i + 1));
+  const tasks = [...plan.matchAll(/^### V02-(\d{3})\r?\n([\s\S]*?)(?=^### |^## |$(?![\s\S]))/gm)];
+  assert.deepEqual(tasks.map(match => Number(match[1])), Array.from({ length: 35 }, (_, i) => i + 1));
+  const index = plan.split('### 25.1 ')[1].split('### V02-001')[0];
+  const rows = [...index.matchAll(/^\| V02-(\d{3})\s*\|[^|]+\|([^|]+)\|/gm)];
+  assert.equal(rows.length, 35);
+  for (const [i, task] of tasks.entries()) {
+    for (const field of ['ID', '任务', '前置依赖', '代码影响范围', '数据库影响', 'API/页面影响',
+      '安全不变量', '必须新增的测试', '验证命令', '完成证据', '回滚方式', '完成标准', '明确不做']) {
+      assert.ok(task[2].split('\n').some(line => line.split('|')[1]?.trim() === field), `${task[1]}: ${field}`);
+    }
+    assert.equal(rows[i][1], task[1]);
+    // Every dependency must point to an earlier task; this also rules out cycles.
+    const dependencies = value => [...value.matchAll(/(?<![\w])(?:V02-)?(\d{3})(?![\w])/g)].map(match => Number(match[1]));
+    const indexed = dependencies(rows[i][2]);
+    const detail = task[2].split('\n').find(line => line.split('|')[1]?.trim() === '前置依赖');
+    assert.deepEqual(dependencies(detail), indexed, `${task[1]}: dependency index differs`);
+    for (const dependency of indexed) assert.ok(dependency >= 1 && dependency < Number(task[1]), `${task[1]} -> ${dependency}`);
+  }
 });

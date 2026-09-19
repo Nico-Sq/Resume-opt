@@ -1,6 +1,6 @@
 # AI 简历平台
 
-面向中国大陆用户的 AI 简历编辑与优化平台。仓库目前处于 V0.1 开发阶段，首期聚焦一份固定测试简历的结构化编辑、保存、预览和恢复能力；AI 优化、JD 匹配、完整诊断、会员与支付暂不进入正式 V0.1 实现。
+面向中国大陆用户的 AI 简历编辑与优化平台。V0.1 受控候选版已验收，现进入已批准的 V0.2 公开多用户基础开发；正式代码当前仍使用固定测试身份和简历，不能公开部署。V0.2 范围为邮箱认证、多简历工作台、账户隔离及删除/恢复，不包含 AI、JD、完整诊断、额度、会员或支付；PDF、导出、分享待重新排期。
 
 ## 当前进度
 
@@ -14,10 +14,10 @@
 - 已完成可靠保存协调器：单 in-flight、800ms 防抖、主动 flush、冻结信封、原键重试、ACK 序号和本地/云端独立状态；真实浏览器已验证保存后刷新可从 PostgreSQL 回读。
 - 已完成冲突与离开恢复：412 后暂停自动上传，展示 base/local/remote 三方变更概览，支持导出本地副本、采用服务器版本或显式重定基线提交，并为未确认修改提供离开提示。
 - 已完成固定入口编辑闭环：全部简历模块使用真实字段、月份、列表、文本块和链接控件，支持条目折叠/复制/删除；编辑、预览、保存 ACK 与刷新回读已经自动化和真实浏览器验证。
-- V01-016 已启动：已加入机器可读性能预算和 20 模块/100 条目合成基准，完成随机隔离 schema 的应用层逻辑恢复及原生 `pg_dump/pg_restore` 自定义归档恢复演练，并在 GitHub Actions 使用独立 PostgreSQL 16.15 服务跑通完整验证门禁和脱敏证据上传。
-- 下一步补齐原生浏览器 IndexedDB 证据及候选版审批记录；托管 PITR 留待生产数据库供应商确定后演练，不扩展登录、AI、会员或支付范围。
+- V01-016 已完成：`844f4ee` 对应 [Actions 35426248904](https://github.com/Nico-Sq/Resume-opt/actions/runs/35426248904) 的完整验证、原生 Chrome + IndexedDB、独立 `pg_dump/pg_restore` 恢复及脱敏证据上传均成功。后续界面修复 `444d646` 仍需对应新 CI，不能套用历史绿色结果。
+- 用户已批准 V0.2 计划；先同步路线，再按 V02-002—005 验收视口、工具栏、分页和真实功能入口。真实认证尚未实现；托管 PITR 和大陆公开发布外部条件仍需落实。
 
-详细状态参见 [V0.1 交付计划](./v0.1-delivery-plan.md)。
+详细状态参见 [V0.1 交付计划](./v0.1-delivery-plan.md) 和 [V0.2 详细计划任务书](./v0.2-delivery-plan.md)。
 
 ## 仓库结构
 
@@ -80,6 +80,7 @@ pnpm dev
 - `GET /api/health/ready`
 - `GET /api/v1/editor-bootstrap`
 - `GET /api/v1/resumes/:id`
+- `PUT /api/v1/resumes/:id/document`
 
 ## 运行测试原型
 
@@ -102,10 +103,14 @@ pnpm ci:full
 pnpm test:integration
 pnpm test:migrations
 pnpm test:save
+pnpm test:browser
+pnpm ops:restore:native
 pnpm build
 ```
 
-推送到 `main` 或创建 Pull Request 时，[GitHub `verify` 工作流](https://github.com/Nico-Sq/Resume-opt/actions/workflows/verify.yml) 会在临时 PostgreSQL 实例上执行同一完整门禁，并保留 14 天的脱敏性能、恢复和数据库初始化证据。
+`ci:full` 不包含原生浏览器和原生恢复两项，需分别执行；数据库相关命令使用隔离测试配置。在根目录运行 `node scripts/validate-technical-selection.mjs` 检查路线、链接和任务依赖。
+
+推送到 `main` 或创建 Pull Request 时，[GitHub `verify` 工作流](https://github.com/Nico-Sq/Resume-opt/actions/workflows/verify.yml) 会在临时 PostgreSQL 实例上执行完整门禁，并独立执行浏览器和原生恢复步骤，保留 14 天的脱敏性能、恢复和数据库初始化证据。V0.2 的 CI 证据保留 30 天是 V02-032 待实施目标，不是当前配置。
 
 提交信息遵循 Conventional Commits，例如：
 
@@ -122,6 +127,7 @@ docs: 补充数据库和API设计文档
 - [视觉设计规范](./design.mf)
 - [技术选型](./technical-selection.md)
 - [V0.1 交付计划](./v0.1-delivery-plan.md)
+- [V0.2 详细计划任务书](./v0.2-delivery-plan.md)
 
 ## 安全说明
 
