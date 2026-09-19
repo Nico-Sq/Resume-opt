@@ -805,6 +805,8 @@ button:focus-visible {
     var(--rail-width) var(--left-panel-width) minmax(360px, 1fr) var(--right-panel-width)
     var(--rail-width);
   grid-template-rows: 60px minmax(0, 1fr);
+  height: 100dvh;
+  min-height: 0;
   background: #090909;
 }
 .editorShell.leftCollapsed {
@@ -917,19 +919,24 @@ button:focus-visible {
   background: #0b0b0b;
 }
 .rightRail {
-  gap: 5px;
-  padding-top: 205px;
+  justify-content: safe center;
+  gap: 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-block: 12px;
 }
 .railItems {
-  gap: 5px;
-  overflow-x: visible;
-  padding: 190px 7px 12px;
+  flex: 1;
+  justify-content: safe center;
+  gap: 8px;
+  overflow-x: hidden;
+  padding: 12px 3px;
 }
 .railItems button,
 .rightRail button {
   position: relative;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 5px;
   color: #efefef;
   font-weight: 400;
@@ -1693,12 +1700,6 @@ button:focus-visible {
     --rail-width: 52px;
     --left-panel-width: 390px;
     --right-panel-width: 350px;
-  }
-  .railItems {
-    padding-top: 120px;
-  }
-  .rightRail {
-    padding-top: 140px;
   }
   .topbarActions span {
     display: none;

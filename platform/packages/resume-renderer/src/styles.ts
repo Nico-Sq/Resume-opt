@@ -33,6 +33,7 @@ export const RESUME_RENDERER_CSS = `
 .resume-renderer .resume-entry-heading > :not(:first-child)::before { content: "|"; margin: 0 2.5mm; color: #9a9a9a; font-weight: 400; }
 .resume-renderer .resume-entry-meta { color: #595959; }
 .resume-renderer .resume-paragraph, .resume-renderer .resume-bullet, .resume-renderer .resume-entry-links { margin: 0 0 var(--resume-paragraph-gap); overflow-wrap: anywhere; }
+.resume-renderer .resume-paragraph[data-continues-on-next='true'], .resume-renderer .resume-bullet[data-continues-on-next='true'] { margin-block-end: 0; }
 .resume-renderer .resume-bullet { display: grid; grid-template-columns: 3mm minmax(0, 1fr); }
 .resume-renderer a { color: var(--resume-accent-color); text-decoration: underline; text-underline-offset: 0.15em; }
 .resume-renderer .resume-page-number { margin-block-start: auto; text-align: center; color: #737373; font-size: 8pt; }

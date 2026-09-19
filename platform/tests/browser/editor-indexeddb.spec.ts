@@ -15,6 +15,7 @@ interface BrowserSample {
 
 interface DraftSummary {
   name: string;
+  summary: string;
   localSeq: number;
   ackedSeq: number;
   pending: boolean;
@@ -53,7 +54,13 @@ async function readDraft(page: Page): Promise<DraftSummary | null> {
             ackedSeq: number;
             pendingEnvelope: unknown;
             workingSnapshot: {
-              sectionsById: Record<string, { kind: string; entries: Array<{ name?: string }> }>;
+              sectionsById: Record<
+                string,
+                {
+                  kind: string;
+                  entries: Array<{ name?: string; blocks?: Array<{ text?: string }> }>;
+                }
+              >;
             };
           }
         | undefined;
@@ -61,8 +68,12 @@ async function readDraft(page: Page): Promise<DraftSummary | null> {
       const basic = Object.values(record.workingSnapshot.sectionsById).find(
         (section) => section.kind === 'basic',
       );
+      const summary = Object.values(record.workingSnapshot.sectionsById).find(
+        (section) => section.kind === 'summary',
+      );
       return {
         name: basic?.entries[0]?.name ?? '',
+        summary: summary?.entries[0]?.blocks?.[0]?.text ?? '',
         localSeq: record.localSeq,
         ackedSeq: record.ackedSeq,
         pending: record.pendingEnvelope !== null,
@@ -92,6 +103,78 @@ async function updateNameAndMeasure(nameInput: Locator, name: string): Promise<B
     ackedSeq: draft.ackedSeq,
   };
 }
+
+test('全屏编辑器无页面级滚动、图标组居中且长内容自动分页', async ({ page }) => {
+  for (const viewport of [
+    { width: 1080, height: 1920 },
+    { width: 1920, height: 1080 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    await expect(page.getByRole('textbox', { name: '姓名', exact: true })).toBeVisible();
+
+    const layout = await page.evaluate(() => {
+      const railMetrics = (selector: string) => {
+        const rail = document.querySelector<HTMLElement>(selector);
+        if (!rail) throw new Error(`缺少侧栏：${selector}`);
+        const buttons = [...rail.querySelectorAll<HTMLElement>('button')].filter(
+          (button) => !button.hasAttribute('aria-expanded'),
+        );
+        const first = buttons[0]?.getBoundingClientRect();
+        const last = buttons.at(-1)?.getBoundingClientRect();
+        const railRect = rail.getBoundingClientRect();
+        if (!first || !last) throw new Error(`侧栏没有图标：${selector}`);
+        return {
+          centerOffset: (first.top + last.bottom) / 2 - (railRect.top + railRect.bottom) / 2,
+          clientWidth: rail.clientWidth,
+          scrollWidth: rail.scrollWidth,
+        };
+      };
+
+      return {
+        viewportHeight: window.innerHeight,
+        documentHeight: document.documentElement.scrollHeight,
+        bodyHeight: document.body.scrollHeight,
+        left: railMetrics('nav[aria-label="简历模块"]'),
+        right: railMetrics('nav[aria-label="编辑器工具"]'),
+      };
+    });
+
+    expect(layout.documentHeight).toBe(layout.viewportHeight);
+    expect(layout.bodyHeight).toBe(layout.viewportHeight);
+    expect(layout.left.scrollWidth).toBeLessThanOrEqual(layout.left.clientWidth);
+    expect(layout.right.scrollWidth).toBeLessThanOrEqual(layout.right.clientWidth);
+    expect(Math.abs(layout.left.centerOffset)).toBeLessThanOrEqual(1);
+    expect(Math.abs(layout.right.centerOffset)).toBeLessThanOrEqual(1);
+  }
+
+  const summaryInput = page.getByRole('textbox', { name: '个人简介', exact: true });
+  const originalSummary = await summaryInput.inputValue();
+  await expect.poll(() => page.locator('.resume-page').count()).toBeGreaterThan(0);
+  const originalPageCount = await page.locator('.resume-page').count();
+  const longSummary = `分页起点${'负责复杂业务系统设计、交付与持续优化，确保关键结果可验证。'.repeat(100)}分页终点`;
+  try {
+    await summaryInput.fill(longSummary);
+    await expect
+      .poll(() => page.locator('.resume-page').count())
+      .toBeGreaterThan(originalPageCount);
+    await expect(page.getByRole('region', { name: 'A4 简历预览' })).toContainText('分页起点');
+    await expect(page.getByRole('region', { name: 'A4 简历预览' })).toContainText('分页终点');
+    await expect(page.getByText(/简历排版未完成/u)).toHaveCount(0);
+  } finally {
+    await summaryInput.fill(originalSummary);
+    await summaryInput.press('Tab');
+    await expect.poll(() => page.locator('.resume-page').count()).toBe(originalPageCount);
+    await expect
+      .poll(async () => {
+        const draft = await readDraft(page);
+        return (
+          draft?.summary === originalSummary && draft.localSeq === draft.ackedSeq && !draft.pending
+        );
+      })
+      .toBe(true);
+  }
+});
 
 test('原生 Chromium 完成预览、IndexedDB、崩溃恢复与云端回读闭环', async ({ browser, page }) => {
   await page.goto('/');

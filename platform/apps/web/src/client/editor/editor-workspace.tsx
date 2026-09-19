@@ -138,6 +138,81 @@ function estimatedMeasurements(flow: readonly RenderFlowBlock[]) {
   ) as Record<string, RenderBlockMeasurement>;
 }
 
+function numericStyle(value: string): number {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function measureElementHeight(element: HTMLElement): number {
+  const style = getComputedStyle(element);
+  return (
+    element.getBoundingClientRect().height +
+    numericStyle(style.marginTop) +
+    numericStyle(style.marginBottom)
+  );
+}
+
+function measureWrappedText(
+  element: HTMLElement,
+  text: string,
+): Array<{ text: string; heightPx: number }> | undefined {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let textNode: Text | null = null;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (node.textContent === text) {
+      textNode = node as Text;
+      break;
+    }
+  }
+  if (!textNode || text.length === 0) return undefined;
+
+  const offsets = [0];
+  for (const character of text) offsets.push((offsets.at(-1) ?? 0) + character.length);
+  const style = getComputedStyle(element);
+  const lineHeight = numericStyle(style.lineHeight);
+  const fragments: Array<{ text: string; heightPx: number }> = [];
+  const range = document.createRange();
+  let startIndex = 0;
+
+  while (startIndex < offsets.length - 1) {
+    let low = startIndex + 1;
+    let high = offsets.length - 1;
+    let lineEndIndex = low;
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2);
+      range.setStart(textNode, offsets[startIndex] ?? 0);
+      range.setEnd(textNode, offsets[middle] ?? text.length);
+      const rectangles = [...range.getClientRects()].filter(
+        (rectangle) => rectangle.width > 0 || rectangle.height > 0,
+      );
+      if (rectangles.length <= 1) {
+        lineEndIndex = middle;
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+
+    range.setStart(textNode, offsets[startIndex] ?? 0);
+    range.setEnd(textNode, offsets[lineEndIndex] ?? text.length);
+    const measuredLineHeight = Math.max(
+      lineHeight,
+      ...[...range.getClientRects()].map((rectangle) => rectangle.height),
+    );
+    fragments.push({
+      text: text.slice(offsets[startIndex], offsets[lineEndIndex]),
+      heightPx: measuredLineHeight,
+    });
+    startIndex = lineEndIndex;
+  }
+
+  const first = fragments[0];
+  const last = fragments.at(-1);
+  if (first) first.heightPx += numericStyle(style.marginTop);
+  if (last) last.heightPx += numericStyle(style.marginBottom);
+  return fragments;
+}
+
 function scheduleNextFrame(callback: () => void): void {
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(callback);
   else setTimeout(callback, 0);
@@ -432,11 +507,21 @@ function EditorWorkspaceContent({
     const measure = () => {
       if (cancelled || !measurementRootRef.current) return;
       const next: Record<string, RenderBlockMeasurement> = {};
+      const blocks = new Map(flow.map((block) => [block.key, block]));
       measurementRootRef.current
         .querySelectorAll<HTMLElement>('[data-render-block-key]')
         .forEach((element) => {
           const key = element.dataset.renderBlockKey;
-          if (key) next[key] = { heightPx: element.getBoundingClientRect().height };
+          if (!key) return;
+          const block = blocks.get(key);
+          const heightPx = measureElementHeight(element);
+          const lineFragments =
+            block &&
+            heightPx > metrics.contentHeightPx &&
+            (block.kind === 'paragraph' || block.kind === 'bullet')
+              ? measureWrappedText(element, block.text)
+              : undefined;
+          next[key] = lineFragments ? { heightPx, lineFragments } : { heightPx };
         });
       if (Object.keys(next).length === flow.length && flow.length > 0) {
         setMeasuredFlow({ flow, values: next });
@@ -450,7 +535,7 @@ function EditorWorkspaceContent({
     return () => {
       cancelled = true;
     };
-  }, [flow]);
+  }, [flow, metrics.contentHeightPx]);
 
   const measurements =
     measuredFlow?.flow === flow ? measuredFlow.values : estimatedMeasurements(flow);
