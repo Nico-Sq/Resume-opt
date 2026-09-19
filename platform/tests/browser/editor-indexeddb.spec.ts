@@ -82,7 +82,7 @@ async function updateNameAndMeasure(nameInput: Locator, name: string): Promise<B
   await nameInput.fill(name);
   await expect(previewName).toHaveText(name);
   const fieldToPreviewMs = performance.now() - startedAt;
-  await expect.poll(async () => (await readDraft(page))?.name).toBe(name);
+  await expect.poll(async () => (await readDraft(page))?.name, { intervals: [25] }).toBe(name);
   const draft = await readDraft(page);
   if (!draft) throw new Error('IndexedDB 草稿记录不存在');
   return {
