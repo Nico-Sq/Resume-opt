@@ -27,8 +27,11 @@ jobs:
       AUTH_MODE: better-auth
       PG_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
       PG_DEV_URL: postgresql://resume_opt_app:ci-app-password@127.0.0.1:5432/resume_opt_dev
+      PG_AUTH_URL: postgresql://resume_opt_auth:ci-auth-password@127.0.0.1:5432/resume_opt_dev
       PG_MIGRATION_URL: postgresql://resume_opt_migrator:ci-migrator-password@127.0.0.1:5432/resume_opt_dev
       PG_TEST_URL: postgresql://resume_opt_test:ci-test-password@127.0.0.1:5432/resume_opt_test
+      BETTER_AUTH_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: ci-only-better-auth-secret-32-chars
       DATABASE_POOL_MAX: "5"
       NEXT_PUBLIC_APP_NAME: AI 简历平台
     services:

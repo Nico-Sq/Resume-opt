@@ -2,17 +2,13 @@ import { randomUUID } from 'node:crypto';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { parseServerRuntimeConfig } from '@resume/config/server';
+import { parseDatabaseToolConfig } from '@resume/config/server';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
 
-const config = parseServerRuntimeConfig({
-  ...process.env,
-  APP_ENV: 'test',
-  AUTH_MODE: 'better-auth',
-});
+const migration = parseDatabaseToolConfig({ ...process.env, APP_ENV: 'test' }, 'migration');
 const schema = `auth_bridge_${randomUUID().replaceAll('-', '')}`;
 const pool = createPostgresPool({
-  connectionString: config.PG_MIGRATION_URL,
+  connectionString: migration.connectionString,
   max: 1,
   applicationName: 'resume-opt-auth-bridge-contract-test',
 });

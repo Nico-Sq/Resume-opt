@@ -11,7 +11,7 @@ import {
   SaveResumeDocument,
   type SaveResumeDocumentInput,
 } from '@resume/application';
-import { parseServerRuntimeConfig } from '@resume/config/server';
+import { parseDatabaseToolConfig, parseServerRuntimeConfig } from '@resume/config/server';
 import type { ResumeDocumentV1 } from '@resume/domain/resume';
 import { FixedIdentityProvider } from '@resume/infrastructure/fixed-identity';
 import { runMigrations } from '@resume/infrastructure/migrations';
@@ -19,15 +19,12 @@ import { createPostgresPool } from '@resume/infrastructure/postgres';
 import { seedFixedResume } from '@resume/infrastructure/resume-seed';
 import { PostgresUserTransactionManager } from '@resume/infrastructure/resume-transactions';
 
-const config = parseServerRuntimeConfig({
-  ...process.env,
-  APP_ENV: 'test',
-  AUTH_MODE: 'better-auth',
-});
+const config = parseServerRuntimeConfig({ ...process.env, APP_ENV: 'test' });
+const migration = parseDatabaseToolConfig({ ...process.env, APP_ENV: 'test' }, 'migration');
 const schema = `save_${randomUUID().replaceAll('-', '')}`;
 const migrationsDirectory = resolve(import.meta.dirname, '../../database/migrations');
 const migrationPool = createPostgresPool({
-  connectionString: config.PG_MIGRATION_URL,
+  connectionString: migration.connectionString,
   max: 1,
   applicationName: 'resume-opt-save-migration-test',
 });

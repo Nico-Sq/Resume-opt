@@ -38,6 +38,12 @@ describe('CI ephemeral PostgreSQL safety gate', () => {
 
     expect(evidence.passed).toBe(true);
     expect(evidence.serverVersion).toBe('16.15');
+    expect(evidence.roles).toEqual([
+      'resume_opt_app',
+      'resume_opt_auth',
+      'resume_opt_migrator',
+      'resume_opt_test',
+    ]);
     expect(serialized).not.toContain('password');
     expect(serialized).not.toContain('postgresql://');
   });

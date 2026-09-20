@@ -3,19 +3,16 @@ import { resolve } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { parseServerRuntimeConfig } from '@resume/config/server';
+import { parseDatabaseToolConfig, parseServerRuntimeConfig } from '@resume/config/server';
 import { runMigrations, type MigrationResult } from '@resume/infrastructure/migrations';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
 
-const config = parseServerRuntimeConfig({
-  ...process.env,
-  APP_ENV: 'test',
-  AUTH_MODE: 'better-auth',
-});
+const config = parseServerRuntimeConfig({ ...process.env, APP_ENV: 'test' });
+const migration = parseDatabaseToolConfig({ ...process.env, APP_ENV: 'test' }, 'migration');
 const schema = `migration_${randomUUID().replaceAll('-', '')}`;
 const migrationsDirectory = resolve(import.meta.dirname, '../../database/migrations');
 const migrationPool = createPostgresPool({
-  connectionString: config.PG_MIGRATION_URL,
+  connectionString: migration.connectionString,
   max: 1,
   applicationName: 'resume-opt-migration-test',
 });

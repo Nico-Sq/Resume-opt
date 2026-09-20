@@ -1,19 +1,15 @@
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { parseServerRuntimeConfig } from '@resume/config/server';
+import { parseDatabaseToolConfig } from '@resume/config/server';
 import { rehearseLogicalRestore } from '../../scripts/ops/rehearse-logical-restore';
 
-const config = parseServerRuntimeConfig({
-  ...process.env,
-  APP_ENV: 'test',
-  AUTH_MODE: 'better-auth',
-});
+const testDatabase = parseDatabaseToolConfig({ ...process.env, APP_ENV: 'test' }, 'test');
 
 describe('synthetic logical restore rehearsal', () => {
   it('restores every V0.1 table into an isolated migrated schema and verifies invariants', async () => {
     const report = await rehearseLogicalRestore({
-      connectionString: config.PG_TEST_URL,
+      connectionString: testDatabase.connectionString,
       environment: 'test',
       migrationsDirectory: resolve(import.meta.dirname, '../../database/migrations'),
     });

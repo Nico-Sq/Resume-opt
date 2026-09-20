@@ -6,6 +6,7 @@ import { getServerRuntimeConfig } from '@/server/runtime';
 export async function GET(request: Request) {
   try {
     const config = getServerRuntimeConfig();
+    if (config.AUTH_MODE !== 'fixed') throw new Error('真实身份模式禁用开发启动入口');
     if (!config.DEV_FIXED_RESUME_ID) throw new Error('缺少固定简历 ID');
     if (!config.DEV_FIXED_USER_ID) throw new Error('缺少固定用户 ID');
     const response = await respondWithResume(request, config.DEV_FIXED_RESUME_ID);

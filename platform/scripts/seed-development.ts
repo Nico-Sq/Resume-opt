@@ -1,8 +1,9 @@
-import { parseServerRuntimeConfig } from '@resume/config/server';
+import { parseDatabaseToolConfig, parseServerRuntimeConfig } from '@resume/config/server';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
 import { seedFixedResume } from '@resume/infrastructure/resume-seed';
 
 const config = parseServerRuntimeConfig(process.env);
+const migration = parseDatabaseToolConfig(process.env, 'migration');
 if (
   config.APP_ENV !== 'local' ||
   config.AUTH_MODE !== 'fixed' ||
@@ -14,7 +15,7 @@ if (
 }
 
 const pool = createPostgresPool({
-  connectionString: config.PG_MIGRATION_URL,
+  connectionString: migration.connectionString,
   max: 1,
   applicationName: 'resume-opt-development-seed',
 });

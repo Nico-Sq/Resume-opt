@@ -4,7 +4,12 @@ import { fileURLToPath } from 'node:url';
 
 import { createPostgresPool } from '@resume/infrastructure/postgres';
 
-const ciRoles = ['resume_opt_app', 'resume_opt_migrator', 'resume_opt_test'] as const;
+const ciRoles = [
+  'resume_opt_app',
+  'resume_opt_auth',
+  'resume_opt_migrator',
+  'resume_opt_test',
+] as const;
 const ciDatabases = ['resume_opt_dev', 'resume_opt_test'] as const;
 
 export function assertEphemeralAdminTarget(ci: string | undefined, connectionString: string): void {
@@ -52,7 +57,7 @@ async function configureDatabase(
       if (identity.rows[0].user !== 'resume_opt_migrator') {
         throw new Error('开发库必须由 resume_opt_migrator 配置');
       }
-      await pool.query('GRANT USAGE ON SCHEMA public TO resume_opt_app');
+      await pool.query('GRANT USAGE ON SCHEMA public TO resume_opt_app, resume_opt_auth');
       await pool.query(
         'ALTER DEFAULT PRIVILEGES FOR ROLE resume_opt_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO resume_opt_app',
       );
@@ -117,6 +122,9 @@ export async function provisionEphemeralPostgres(): Promise<{ serverVersion: str
       "CREATE ROLE resume_opt_app LOGIN PASSWORD 'ci-app-password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION",
     );
     await admin.query(
+      "CREATE ROLE resume_opt_auth LOGIN PASSWORD 'ci-auth-password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION",
+    );
+    await admin.query(
       "CREATE ROLE resume_opt_migrator LOGIN PASSWORD 'ci-migrator-password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION",
     );
     await admin.query(
@@ -131,7 +139,7 @@ export async function provisionEphemeralPostgres(): Promise<{ serverVersion: str
     await admin.query('REVOKE CONNECT ON DATABASE resume_opt_dev FROM PUBLIC');
     await admin.query('REVOKE CONNECT ON DATABASE resume_opt_test FROM PUBLIC');
     await admin.query(
-      'GRANT CONNECT ON DATABASE resume_opt_dev TO resume_opt_app, resume_opt_migrator',
+      'GRANT CONNECT ON DATABASE resume_opt_dev TO resume_opt_app, resume_opt_auth, resume_opt_migrator',
     );
     await admin.query('GRANT CONNECT ON DATABASE resume_opt_test TO resume_opt_test');
   } catch (error) {

@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { parseServerRuntimeConfig } from '@resume/config/server';
+import { parseDatabaseToolConfig, parseServerRuntimeConfig } from '@resume/config/server';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
 import { createPrototypeDocument } from '@resume/infrastructure/resume-seed';
 
 const config = parseServerRuntimeConfig(process.env);
+const migration = parseDatabaseToolConfig(process.env, 'migration');
 if (
   config.APP_ENV !== 'local' ||
   config.AUTH_MODE !== 'fixed' ||
@@ -18,7 +19,7 @@ const document = createPrototypeDocument();
 const snapshot = JSON.stringify(document);
 const contentHash = createHash('sha256').update(snapshot).digest('hex');
 const pool = createPostgresPool({
-  connectionString: config.PG_MIGRATION_URL,
+  connectionString: migration.connectionString,
   max: 1,
   applicationName: 'resume-opt-prototype-reset',
 });

@@ -1,25 +1,23 @@
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { parseServerRuntimeConfig } from '@resume/config/server';
+import { parseDatabaseToolConfig, parseServerRuntimeConfig } from '@resume/config/server';
 import { checkDatabaseReadiness, createPostgresPool } from '@resume/infrastructure/postgres';
 
-const config = parseServerRuntimeConfig({
-  ...process.env,
-  APP_ENV: 'test',
-  AUTH_MODE: 'better-auth',
-});
+const config = parseServerRuntimeConfig({ ...process.env, APP_ENV: 'test' });
+const migration = parseDatabaseToolConfig({ ...process.env, APP_ENV: 'test' }, 'migration');
+const testDatabase = parseDatabaseToolConfig({ ...process.env, APP_ENV: 'test' }, 'test');
 const applicationPool = createPostgresPool({
   connectionString: config.PG_DEV_URL,
   max: 1,
   applicationName: 'resume-opt-integration-test',
 });
 const migrationPool = createPostgresPool({
-  connectionString: config.PG_MIGRATION_URL,
+  connectionString: migration.connectionString,
   max: 1,
   applicationName: 'resume-opt-migration-test',
 });
 const testPool = createPostgresPool({
-  connectionString: config.PG_TEST_URL,
+  connectionString: testDatabase.connectionString,
   max: 1,
   applicationName: 'resume-opt-test-role-test',
 });

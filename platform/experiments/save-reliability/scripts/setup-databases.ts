@@ -59,7 +59,12 @@ const admin = new Client({
 });
 await admin.connect();
 
-const roles = ['resume_opt_app', 'resume_opt_migrator', 'resume_opt_test'] as const;
+const roles = [
+  'resume_opt_app',
+  'resume_opt_auth',
+  'resume_opt_migrator',
+  'resume_opt_test',
+] as const;
 const databases = ['resume_opt_dev', 'resume_opt_test'] as const;
 const existingRoles = await admin.query<{ rolname: string }>(
   'SELECT rolname FROM pg_roles WHERE rolname = ANY($1)',
@@ -76,10 +81,13 @@ if (existingRoles.rowCount || existingDatabases.rowCount) {
   );
 }
 
-const secrets = { app: password(), migrator: password(), test: password() };
+const secrets = { app: password(), auth: password(), migrator: password(), test: password() };
 try {
   await admin.query(
     `CREATE ROLE resume_opt_app LOGIN PASSWORD '${secrets.app}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION`,
+  );
+  await admin.query(
+    `CREATE ROLE resume_opt_auth LOGIN PASSWORD '${secrets.auth}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION`,
   );
   await admin.query(
     `CREATE ROLE resume_opt_migrator LOGIN PASSWORD '${secrets.migrator}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION`,
@@ -96,7 +104,7 @@ try {
   await admin.query('REVOKE CONNECT ON DATABASE resume_opt_dev FROM PUBLIC');
   await admin.query('REVOKE CONNECT ON DATABASE resume_opt_test FROM PUBLIC');
   await admin.query(
-    'GRANT CONNECT ON DATABASE resume_opt_dev TO resume_opt_app, resume_opt_migrator',
+    'GRANT CONNECT ON DATABASE resume_opt_dev TO resume_opt_app, resume_opt_auth, resume_opt_migrator',
   );
   await admin.query('GRANT CONNECT ON DATABASE resume_opt_test TO resume_opt_test');
 } catch (error) {
@@ -123,7 +131,7 @@ for (const [database, user, rolePassword] of [
   await client.connect();
   await client.query('REVOKE CREATE ON SCHEMA public FROM PUBLIC');
   if (database === 'resume_opt_dev') {
-    await client.query('GRANT USAGE ON SCHEMA public TO resume_opt_app');
+    await client.query('GRANT USAGE ON SCHEMA public TO resume_opt_app, resume_opt_auth');
     await client.query(
       'ALTER DEFAULT PRIVILEGES FOR ROLE resume_opt_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO resume_opt_app',
     );
@@ -140,6 +148,7 @@ const url = (user: string, rolePassword: string, database: string) =>
 const content = [
   '# Generated locally. Never commit or share this file.',
   `PG_DEV_URL=${url('resume_opt_app', secrets.app, 'resume_opt_dev')}`,
+  `PG_AUTH_URL=${url('resume_opt_auth', secrets.auth, 'resume_opt_dev')}`,
   `PG_MIGRATION_URL=${url('resume_opt_migrator', secrets.migrator, 'resume_opt_dev')}`,
   `PG_TEST_URL=${url('resume_opt_test', secrets.test, 'resume_opt_test')}`,
   '',

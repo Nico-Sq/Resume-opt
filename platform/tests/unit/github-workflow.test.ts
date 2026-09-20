@@ -22,6 +22,9 @@ describe('GitHub verification workflow', () => {
     expect(workflow).toContain(
       'PG_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres',
     );
+    expect(workflow).toContain(
+      'PG_AUTH_URL: postgresql://resume_opt_auth:ci-auth-password@127.0.0.1:5432/resume_opt_dev',
+    );
     expect(actionReferences.length).toBeGreaterThanOrEqual(3);
     expect(actionReferences.every((reference) => /@[a-f0-9]{40}$/u.test(reference))).toBe(true);
   });
