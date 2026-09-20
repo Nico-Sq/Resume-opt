@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./database-schema": "./src/database/schema.ts",
     "./fixed-identity": "./src/identity/fixed-identity.ts",
+    "./better-auth-contract": "./src/identity/better-auth-contract.ts",
     "./migrations": "./src/database/migrations.ts",
     "./postgres": "./src/postgres.ts",
     "./resume-seed": "./src/resume/seed-fixed-resume.ts",

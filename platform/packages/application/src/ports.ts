@@ -8,6 +8,17 @@ export interface IdentityProvider {
   requireIdentity(): Promise<CurrentIdentity>;
 }
 
+export interface AuthenticatedSession {
+  userId: string;
+  displayName: string;
+  emailVerified: boolean;
+  expiresAt: string;
+}
+
+export interface SessionProvider {
+  getSession(): Promise<AuthenticatedSession | null>;
+}
+
 export interface PersistedResume {
   id: string;
   userId: string;

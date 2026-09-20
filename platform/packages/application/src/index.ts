@@ -16,6 +16,7 @@ export {
   type SaveResumeDocumentResult,
 } from './resume/save-resume-document';
 export type {
+  AuthenticatedSession,
   CurrentIdentity,
   IdentityProvider,
   PersistedResume,
@@ -25,6 +26,7 @@ export type {
   SaveReceipt,
   SaveResumeCommand,
   SaveResumeResult,
+  SessionProvider,
   UserTransaction,
   UserTransactionManager,
 } from './ports';
