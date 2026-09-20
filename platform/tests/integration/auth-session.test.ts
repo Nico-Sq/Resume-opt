@@ -8,6 +8,7 @@ import {
   BetterAuthSessionProvider,
   createBetterAuthServer,
   handleBetterAuthRequest,
+  InMemoryAuthMailbox,
   type BetterAuthServer,
 } from '@resume/infrastructure/better-auth-server';
 import { runMigrations } from '@resume/infrastructure/migrations';
@@ -37,8 +38,11 @@ const applicationPool = createPostgresPool({
   max: 3,
   applicationName: 'resume-opt-session-identity-test',
 });
-const sentVerificationTokens: Array<{ email: string; token: string }> = [];
+const mailbox = new InMemoryAuthMailbox();
 let auth: BetterAuthServer;
+let verificationDeliveryError: Error | undefined;
+let resetDeliveryError: Error | undefined;
+let blockVerificationDelivery = false;
 
 function qualified(table: string): string {
   if (!/^[a-z_]+$/u.test(table)) throw new Error('测试表名不安全');
@@ -96,6 +100,31 @@ async function register(email: string, name: string) {
   return body.user;
 }
 
+function latestMail(purpose: 'verify-email' | 'reset-password', email: string) {
+  const message = [...mailbox.readAll()]
+    .reverse()
+    .find((candidate) => candidate.purpose === purpose && candidate.to === email);
+  if (!message) throw new Error(`未找到 ${email} 的 ${purpose} 测试邮件`);
+  return message;
+}
+
+async function verifyEmail(email: string) {
+  const response = await call(
+    `/api/auth/verify-email?token=${encodeURIComponent(latestMail('verify-email', email).token)}`,
+    'GET',
+  );
+  expect(response.status).toBe(200);
+  expect(response.headers.get('set-cookie')).toBeNull();
+  return response;
+}
+
+async function requestPasswordReset(email: string) {
+  return call('/api/auth/request-password-reset', 'POST', {
+    email,
+    redirectTo: '/reset-password',
+  });
+}
+
 async function verifyAndLogin(email: string) {
   await migrationPool.query(
     `update ${qualified('auth_users')} set email_verified = true where email = $1`,
@@ -120,10 +149,16 @@ beforeAll(async () => {
     baseURL,
     secret: 'integration-test-secret-with-at-least-32-characters',
     schemaName: schema,
-    sendVerificationEmail: ({ user, token }) => {
-      sentVerificationTokens.push({ email: user.email, token });
-      return Promise.resolve();
+    sendVerificationEmail: (data, request) => {
+      if (verificationDeliveryError) return Promise.reject(verificationDeliveryError);
+      if (blockVerificationDelivery) return new Promise<void>(() => undefined);
+      return mailbox.sendVerificationEmail(data, request);
     },
+    sendResetPassword: (data, request) => {
+      if (resetDeliveryError) return Promise.reject(resetDeliveryError);
+      return mailbox.sendResetPassword(data, request);
+    },
+    mailTimeoutMs: 25,
   });
 });
 
@@ -141,8 +176,10 @@ describe('Better Auth real PostgreSQL handler and sessions', () => {
     const user = await register(email, '注册用户');
 
     expect(user.email).toBe(normalizedEmail);
-    expect(sentVerificationTokens).toContainEqual({
-      email: normalizedEmail,
+    expect(mailbox.readAll()).toContainEqual({
+      purpose: 'verify-email',
+      to: normalizedEmail,
+      url: expect.any(String) as string,
       token: expect.any(String) as string,
     });
 
@@ -182,6 +219,227 @@ describe('Better Auth real PostgreSQL handler and sessions', () => {
     });
     expect(login.status).toBe(403);
     expect(login.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('consumes email verification tokens once across expiry and concurrent requests', async () => {
+    const email = `${randomUUID()}@example.cn`;
+    const user = await register(email, '验证用户');
+    const token = latestMail('verify-email', email).token;
+
+    const existingResend = await call('/api/auth/send-verification-email', 'POST', { email });
+    const unknownResend = await call('/api/auth/send-verification-email', 'POST', {
+      email: `${randomUUID()}@example.cn`,
+    });
+    expect(existingResend.status).toBe(200);
+    expect(unknownResend.status).toBe(200);
+    expect(await unknownResend.json()).toEqual(await existingResend.json());
+
+    const rawToken = await migrationPool.query<{ count: number }>(
+      `select count(*)::int as count from ${qualified('auth_verifications')} where identifier like $1 or value = $1`,
+      [`%${token}%`],
+    );
+    expect(rawToken.rows[0]?.count).toBe(0);
+
+    const rejectedCallback = await call(
+      `/api/auth/verify-email?token=${encodeURIComponent(latestMail('verify-email', email).token)}&callbackURL=${encodeURIComponent('https://example.invalid/steal')}`,
+      'GET',
+    );
+    expect(rejectedCallback.status).toBe(403);
+    await verifyEmail(email);
+    const verified = await migrationPool.query<{ email_verified: boolean }>(
+      `select email_verified from ${qualified('auth_users')} where id = $1`,
+      [user.id],
+    );
+    expect(verified.rows[0]?.email_verified).toBe(true);
+    expect(
+      (
+        await call(
+          `/api/auth/verify-email?token=${encodeURIComponent(latestMail('verify-email', email).token)}`,
+          'GET',
+        )
+      ).status,
+    ).toBe(401);
+    expect((await call('/api/auth/verify-email?token=tampered', 'GET')).status).toBe(401);
+
+    const expiredEmail = `${randomUUID()}@example.cn`;
+    const expiredUser = await register(expiredEmail, '过期验证用户');
+    await migrationPool.query(
+      `update ${qualified('auth_verifications')} set expires_at = now() - interval '1 second' where value = $1`,
+      [expiredUser.id],
+    );
+    expect(
+      (
+        await call(
+          `/api/auth/verify-email?token=${encodeURIComponent(latestMail('verify-email', expiredEmail).token)}`,
+          'GET',
+        )
+      ).status,
+    ).toBe(401);
+
+    const concurrentEmail = `${randomUUID()}@example.cn`;
+    await register(concurrentEmail, '并发验证用户');
+    const concurrentPath = `/api/auth/verify-email?token=${encodeURIComponent(latestMail('verify-email', concurrentEmail).token)}`;
+    const statuses = await Promise.all([
+      call(concurrentPath, 'GET').then((response) => response.status),
+      call(concurrentPath, 'GET').then((response) => response.status),
+    ]);
+    expect(statuses.sort()).toEqual([200, 401]);
+  });
+
+  it('resets passwords once, revokes old sessions and keeps account discovery generic', async () => {
+    const email = `${randomUUID()}@example.cn`;
+    const user = await register(email, '重置用户');
+    await verifyEmail(email);
+    const [cookieA, cookieB] = await Promise.all([verifyAndLogin(email), verifyAndLogin(email)]);
+
+    const accepted = await requestPasswordReset(email);
+    const unknown = await requestPasswordReset(`${randomUUID()}@example.cn`);
+    expect(accepted.status).toBe(200);
+    expect(unknown.status).toBe(200);
+    expect(await unknown.json()).toEqual(await accepted.clone().json());
+
+    const token = latestMail('reset-password', email).token;
+    const rawToken = await migrationPool.query<{ count: number }>(
+      `select count(*)::int as count from ${qualified('auth_verifications')} where identifier like $1 or value = $1`,
+      [`%${token}%`],
+    );
+    expect(rawToken.rows[0]?.count).toBe(0);
+
+    const callback = await call(
+      `/api/auth/reset-password/${encodeURIComponent(token)}?callbackURL=/reset-password`,
+      'GET',
+    );
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get('location')).toContain(
+      `/reset-password?token=${encodeURIComponent(token)}`,
+    );
+    expect(
+      (
+        await call(
+          `/api/auth/reset-password/${encodeURIComponent(token)}?callbackURL=${encodeURIComponent('https://example.invalid/steal')}`,
+          'GET',
+        )
+      ).status,
+    ).toBe(403);
+
+    const reset = await call('/api/auth/reset-password', 'POST', {
+      token,
+      newPassword: 'New-strong-password-456',
+    });
+    expect(reset.status).toBe(200);
+    expect(
+      await new BetterAuthSessionProvider(
+        auth,
+        applicationPool,
+        new Headers({ Cookie: cookieA }),
+        schema,
+      ).getSession(),
+    ).toBeNull();
+    expect(
+      await new BetterAuthSessionProvider(
+        auth,
+        applicationPool,
+        new Headers({ Cookie: cookieB }),
+        schema,
+      ).getSession(),
+    ).toBeNull();
+    expect(
+      (
+        await call('/api/auth/reset-password', 'POST', {
+          token,
+          newPassword: 'Another-strong-password-789',
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await call('/api/auth/reset-password', 'POST', {
+          token: 'tampered',
+          newPassword: 'Another-strong-password-789',
+        })
+      ).status,
+    ).toBe(400);
+
+    const oldPassword = await call('/api/auth/sign-in/email', 'POST', {
+      email,
+      password: 'Strong-password-123',
+    });
+    const newPassword = await call('/api/auth/sign-in/email', 'POST', {
+      email,
+      password: 'New-strong-password-456',
+    });
+    expect(oldPassword.status).toBe(401);
+    expect(newPassword.status).toBe(200);
+
+    await requestPasswordReset(email);
+    const expiredToken = latestMail('reset-password', email).token;
+    await migrationPool.query(
+      `update ${qualified('auth_verifications')} set expires_at = now() - interval '1 second' where value = $1`,
+      [user.id],
+    );
+    expect(
+      (
+        await call('/api/auth/reset-password', 'POST', {
+          token: expiredToken,
+          newPassword: 'Expired-strong-password-789',
+        })
+      ).status,
+    ).toBe(400);
+
+    await requestPasswordReset(email);
+    const concurrentToken = latestMail('reset-password', email).token;
+    const statuses = await Promise.all([
+      call('/api/auth/reset-password', 'POST', {
+        token: concurrentToken,
+        newPassword: 'Concurrent-password-A-789',
+      }).then((response) => response.status),
+      call('/api/auth/reset-password', 'POST', {
+        token: concurrentToken,
+        newPassword: 'Concurrent-password-B-789',
+      }).then((response) => response.status),
+    ]);
+    expect(statuses.sort()).toEqual([200, 400]);
+  });
+
+  it('keeps identities after fake-mail failure and permits a safe retry', async () => {
+    const email = `${randomUUID()}@example.cn`;
+    verificationDeliveryError = new Error('fake verification delivery failed');
+    const registration = await call('/api/auth/sign-up/email', 'POST', {
+      email,
+      name: '邮件失败用户',
+      password: 'Strong-password-123',
+    });
+    verificationDeliveryError = undefined;
+    expect(registration.status).toBe(200);
+
+    const user = await migrationPool.query<{ id: string }>(
+      `select id from ${qualified('auth_users')} where email = $1`,
+      [email],
+    );
+    expect(user.rowCount).toBe(1);
+    expect((await call('/api/auth/send-verification-email', 'POST', { email })).status).toBe(200);
+    await verifyEmail(email);
+
+    const timeoutEmail = `${randomUUID()}@example.cn`;
+    await register(timeoutEmail, '超时邮件用户');
+    blockVerificationDelivery = true;
+    const startedAt = Date.now();
+    const timedOut = await call('/api/auth/send-verification-email', 'POST', {
+      email: timeoutEmail,
+    });
+    blockVerificationDelivery = false;
+    expect(timedOut.status).toBe(200);
+    expect(Date.now() - startedAt).toBeLessThan(1_500);
+    expect(
+      (await call('/api/auth/send-verification-email', 'POST', { email: timeoutEmail })).status,
+    ).toBe(200);
+
+    resetDeliveryError = new Error('fake reset delivery failed');
+    const failedReset = await requestPasswordReset(email);
+    resetDeliveryError = undefined;
+    expect(failedReset.status).toBe(200);
+    expect((await requestPasswordReset(email)).status).toBe(200);
+    expect(latestMail('reset-password', email).token).toBeTruthy();
   });
 
   it('returns a token-free session, revokes logout immediately and blocks extra endpoints', async () => {

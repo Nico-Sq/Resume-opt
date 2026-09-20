@@ -5,6 +5,8 @@ export {
   BetterAuthSessionProvider,
   createBetterAuthServer,
   handleBetterAuthRequest,
+  InMemoryAuthMailbox,
+  type AuthMailMessage,
   type BetterAuthServer,
   type BetterAuthServerOptions,
 } from './identity/better-auth-server';

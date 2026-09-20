@@ -18,26 +18,98 @@ import {
 type SendVerificationEmail = NonNullable<
   NonNullable<BetterAuthOptions['emailVerification']>['sendVerificationEmail']
 >;
+type SendResetPassword = NonNullable<
+  NonNullable<BetterAuthOptions['emailAndPassword']>['sendResetPassword']
+>;
+
+export interface AuthMailMessage {
+  purpose: 'verify-email' | 'reset-password';
+  to: string;
+  url: string;
+  token: string;
+}
+
+export class InMemoryAuthMailbox {
+  readonly #messages: AuthMailMessage[] = [];
+
+  readonly sendVerificationEmail: SendVerificationEmail = ({ user, url, token }) => {
+    this.#messages.push({ purpose: 'verify-email', to: user.email, url, token });
+    return Promise.resolve();
+  };
+
+  readonly sendResetPassword: SendResetPassword = ({ user, url, token }) => {
+    this.#messages.push({ purpose: 'reset-password', to: user.email, url, token });
+    return Promise.resolve();
+  };
+
+  readAll(): readonly AuthMailMessage[] {
+    return this.#messages.map((message) => ({ ...message }));
+  }
+}
 
 export interface BetterAuthServerOptions {
   authPool: Pool;
   baseURL: string;
   secret: string;
   sendVerificationEmail: SendVerificationEmail;
+  sendResetPassword: SendResetPassword;
+  mailTimeoutMs?: number;
   schemaName?: string;
 }
 
+const EMAIL_VERIFICATION_PREFIX = 'resume-opt:verify-email:';
+const DEFAULT_MAIL_TIMEOUT_MS = 5_000;
+
+async function deliverWithTimeout(delivery: Promise<void>, timeoutMs: number): Promise<void> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      delivery,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          reject(new Error('邮件发送超时'));
+        }, timeoutMs);
+      }),
+    ]);
+  } catch {
+    throw new Error('邮件发送失败');
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 export function createBetterAuthServer(options: BetterAuthServerOptions) {
-  return betterAuth({
+  const mailTimeoutMs = options.mailTimeoutMs ?? DEFAULT_MAIL_TIMEOUT_MS;
+  const auth = betterAuth<BetterAuthOptions>({
     ...createBetterAuthOptions(new PostgresDialect({ pool: options.authPool }), options.schemaName),
     baseURL: options.baseURL,
     secret: options.secret,
     trustedOrigins: [new URL(options.baseURL).origin],
     emailVerification: {
       ...betterAuthCoreOptions.emailVerification,
-      sendVerificationEmail: options.sendVerificationEmail,
+      sendVerificationEmail: async (data, request) => {
+        const context = await auth.$context;
+        await context.internalAdapter.createVerificationValue({
+          identifier: `${EMAIL_VERIFICATION_PREFIX}${data.token}`,
+          value: data.user.id,
+          expiresAt: new Date(
+            Date.now() + betterAuthCoreOptions.emailVerification.expiresIn * 1_000,
+          ),
+        });
+        try {
+          await deliverWithTimeout(options.sendVerificationEmail(data, request), mailTimeoutMs);
+        } catch {
+          console.error('认证邮件发送失败');
+        }
+      },
+    },
+    emailAndPassword: {
+      ...betterAuthCoreOptions.emailAndPassword,
+      sendResetPassword: (data, request) =>
+        deliverWithTimeout(options.sendResetPassword(data, request), mailTimeoutMs),
     },
   });
+  return auth;
 }
 
 export type BetterAuthServer = ReturnType<typeof createBetterAuthServer>;
@@ -71,14 +143,56 @@ export async function handleBetterAuthRequest(
     return Response.json({ code: 'AUTH_ENDPOINT_NOT_FOUND' }, { status: 404 });
   }
 
-  const pathname = new URL(request.url).pathname;
+  const url = new URL(request.url);
+  const { pathname } = url;
   if (pathname === '/api/auth/get-session') {
     return Response.json(await sessionProvider.getSession(), {
       headers: { 'Cache-Control': 'private, no-store' },
     });
   }
 
-  const response = await auth.handler(request);
+  const callbackURL = url.searchParams.get('callbackURL');
+  const hasCallback =
+    pathname === '/api/auth/verify-email' ||
+    (request.method === 'GET' && pathname.startsWith('/api/auth/reset-password/'));
+  if (callbackURL && hasCallback) {
+    const context = await auth.$context;
+    let callbackIsTrusted = false;
+    try {
+      callbackIsTrusted =
+        new URL(callbackURL, context.baseURL).origin === new URL(context.baseURL).origin;
+    } catch {
+      callbackIsTrusted = false;
+    }
+    if (!callbackIsTrusted) {
+      return Response.json(
+        { code: 'AUTH_ORIGIN_FORBIDDEN' },
+        { status: 403, headers: { 'Cache-Control': 'private, no-store' } },
+      );
+    }
+  }
+
+  let authRequest = request;
+  if (pathname === '/api/auth/verify-email') {
+    const token = url.searchParams.get('token');
+    const context = await auth.$context;
+    if (token) {
+      if (token.length > 4_096) {
+        url.searchParams.set('token', 'invalid');
+        authRequest = new Request(url, request);
+      } else {
+        const verification = await context.internalAdapter.consumeVerificationValue(
+          `${EMAIL_VERIFICATION_PREFIX}${token}`,
+        );
+        if (!verification) {
+          url.searchParams.set('token', 'invalid');
+          authRequest = new Request(url, request);
+        }
+      }
+    }
+  }
+
+  const response = await auth.handler(authRequest);
   const headers = new Headers(response.headers);
   headers.set('Cache-Control', 'private, no-store');
   if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {

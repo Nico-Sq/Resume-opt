@@ -4,6 +4,7 @@ import { FixedIdentityProvider } from '@resume/infrastructure/fixed-identity';
 import {
   BetterAuthSessionProvider,
   createBetterAuthServer,
+  InMemoryAuthMailbox,
   type BetterAuthServer,
 } from '@resume/infrastructure/better-auth-server';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
@@ -49,11 +50,13 @@ export function getBetterAuthServer() {
     max: config.DATABASE_POOL_MAX,
     applicationName: 'resume-opt-auth',
   });
+  const authMailbox = new InMemoryAuthMailbox();
   authServer = createBetterAuthServer({
     authPool,
     baseURL: config.BETTER_AUTH_URL,
     secret: config.BETTER_AUTH_SECRET,
-    sendVerificationEmail: () => Promise.resolve(),
+    sendVerificationEmail: authMailbox.sendVerificationEmail,
+    sendResetPassword: authMailbox.sendResetPassword,
   });
   return authServer;
 }
