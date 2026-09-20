@@ -89,10 +89,35 @@ async function updateNameAndMeasure(nameInput: Locator, name: string): Promise<B
   const previewName = page
     .getByRole('region', { name: 'A4 简历预览' })
     .getByRole('heading', { level: 1 });
+  const inputId = await nameInput.getAttribute('id');
+  if (!inputId) throw new Error('姓名输入框缺少 id');
+  await previewName.evaluate(
+    (element, expected) => {
+      const input = document.getElementById(expected.inputId);
+      if (!(input instanceof HTMLInputElement) || !(element instanceof HTMLElement)) {
+        throw new Error('性能采样目标不存在');
+      }
+      input.addEventListener(
+        'input',
+        () => {
+          const startedAt = performance.now();
+          const observer = new MutationObserver(() => {
+            if (element.textContent !== expected.name) return;
+            element.dataset.fieldToPreviewMs = String(performance.now() - startedAt);
+            observer.disconnect();
+          });
+          observer.observe(element, { childList: true, characterData: true, subtree: true });
+        },
+        { once: true },
+      );
+    },
+    { inputId, name },
+  );
   const startedAt = performance.now();
   await nameInput.fill(name);
   await expect(previewName).toHaveText(name);
-  const fieldToPreviewMs = performance.now() - startedAt;
+  const fieldToPreviewMs = Number(await previewName.getAttribute('data-field-to-preview-ms'));
+  if (!Number.isFinite(fieldToPreviewMs)) throw new Error('预览性能采样失败');
   await expect.poll(async () => (await readDraft(page))?.name, { intervals: [25] }).toBe(name);
   const draft = await readDraft(page);
   if (!draft) throw new Error('IndexedDB 草稿记录不存在');
