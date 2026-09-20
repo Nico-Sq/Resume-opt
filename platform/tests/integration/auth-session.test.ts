@@ -22,6 +22,8 @@ if (!appConnectionString) throw new Error('真实 Auth Session 测试缺少 PG_D
 
 const schema = `auth_session_${randomUUID().replaceAll('-', '')}`;
 const baseURL = 'http://localhost:3000';
+const secureBaseURL = 'https://resume.example';
+const authSecret = 'integration-test-secret-with-at-least-32-characters';
 const migrationsDirectory = fileURLToPath(new URL('../../database/migrations', import.meta.url));
 const migrationPool = createPostgresPool({
   connectionString: migration.connectionString,
@@ -40,9 +42,12 @@ const applicationPool = createPostgresPool({
 });
 const mailbox = new InMemoryAuthMailbox();
 let auth: BetterAuthServer;
+let authPeer: BetterAuthServer;
+let secureAuth: BetterAuthServer;
 let verificationDeliveryError: Error | undefined;
 let resetDeliveryError: Error | undefined;
 let blockVerificationDelivery = false;
+let clientIpSequence = 1;
 
 function qualified(table: string): string {
   if (!/^[a-z_]+$/u.test(table)) throw new Error('测试表名不安全');
@@ -54,8 +59,9 @@ function request(
   method: 'GET' | 'POST',
   body?: Record<string, unknown>,
   cookie?: string,
+  clientIp = `192.0.2.${String(clientIpSequence++)}`,
 ) {
-  const headers = new Headers({ Origin: baseURL });
+  const headers = new Headers({ Origin: baseURL, 'X-Resume-Client-Ip': clientIp });
   if (body) headers.set('Content-Type', 'application/json');
   if (cookie) headers.set('Cookie', cookie);
   return new Request(`${baseURL}${path}`, {
@@ -70,8 +76,9 @@ async function call(
   method: 'GET' | 'POST',
   body?: Record<string, unknown>,
   cookie?: string,
+  clientIp?: string,
 ) {
-  const authRequest = request(path, method, body, cookie);
+  const authRequest = request(path, method, body, cookie, clientIp);
   return handleBetterAuthRequest(
     auth,
     authRequest,
@@ -137,6 +144,12 @@ async function verifyAndLogin(email: string) {
   const body = await response.clone().text();
   expect(response.status).toBe(200);
   expect(body).not.toMatch(/token|password/iu);
+  const cookieHeader =
+    response.headers.getSetCookie()[0] ?? response.headers.get('set-cookie') ?? '';
+  expect(cookieHeader).toMatch(/; HttpOnly/iu);
+  expect(cookieHeader).toMatch(/; SameSite=Lax/iu);
+  expect(cookieHeader).toMatch(/; Path=\//iu);
+  expect(cookieHeader).not.toMatch(/; Domain=/iu);
   return sessionCookie(response);
 }
 
@@ -147,7 +160,7 @@ beforeAll(async () => {
   auth = createBetterAuthServer({
     authPool,
     baseURL,
-    secret: 'integration-test-secret-with-at-least-32-characters',
+    secret: authSecret,
     schemaName: schema,
     sendVerificationEmail: (data, request) => {
       if (verificationDeliveryError) return Promise.reject(verificationDeliveryError);
@@ -159,6 +172,22 @@ beforeAll(async () => {
       return mailbox.sendResetPassword(data, request);
     },
     mailTimeoutMs: 25,
+  });
+  authPeer = createBetterAuthServer({
+    authPool,
+    baseURL,
+    secret: authSecret,
+    schemaName: schema,
+    sendVerificationEmail: mailbox.sendVerificationEmail,
+    sendResetPassword: mailbox.sendResetPassword,
+  });
+  secureAuth = createBetterAuthServer({
+    authPool,
+    baseURL: secureBaseURL,
+    secret: authSecret,
+    schemaName: schema,
+    sendVerificationEmail: mailbox.sendVerificationEmail,
+    sendResetPassword: mailbox.sendResetPassword,
   });
 });
 
@@ -461,8 +490,38 @@ describe('Better Auth real PostgreSQL handler and sessions', () => {
     const blocked = await call('/api/auth/list-sessions', 'GET', undefined, cookie);
     expect(blocked.status).toBe(404);
 
-    const logout = await call('/api/auth/sign-out', 'POST', undefined, cookie);
+    const csrfProvider = new BetterAuthSessionProvider(
+      auth,
+      applicationPool,
+      new Headers({ Cookie: cookie }),
+      schema,
+      authSecret,
+    );
+    const csrfToken = await csrfProvider.getCsrfToken();
+    if (!csrfToken) throw new Error('登录会话缺少 CSRF Token');
+    expect(csrfToken).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(cookie).not.toContain(csrfToken);
+
+    const secureRequest = new Request(`${secureBaseURL}/api/auth/sign-in/email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: secureBaseURL,
+        'X-Resume-Client-Ip': '198.51.100.90',
+      },
+      body: JSON.stringify({ email, password: 'Strong-password-123' }),
+    });
+    const secureLogin = await handleBetterAuthRequest(
+      secureAuth,
+      secureRequest,
+      new BetterAuthSessionProvider(secureAuth, applicationPool, secureRequest.headers, schema),
+    );
+    expect(secureLogin.status).toBe(200);
+    expect(secureLogin.headers.get('set-cookie')).toMatch(/; Secure/iu);
+
+    const logout = await call('/api/auth/sign-out', 'POST', {}, cookie);
     expect(logout.status).toBe(200);
+    expect(await csrfProvider.getCsrfToken()).toBeNull();
     expect(
       await new BetterAuthSessionProvider(
         auth,
@@ -516,5 +575,75 @@ describe('Better Auth real PostgreSQL handler and sessions', () => {
       [userB.id],
     );
     expect(await providerB.getSession()).toBeNull();
+  });
+
+  it('rejects unsafe auth writes before account lookup', async () => {
+    const unusedSessionProvider = { getSession: () => Promise.resolve(null) };
+    const missingOrigin = new Request(`${baseURL}/api/auth/sign-in/email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const crossSite = new Request(`${baseURL}/api/auth/sign-in/email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'https://evil.example',
+        'Sec-Fetch-Site': 'cross-site',
+      },
+      body: '{}',
+    });
+    const wrongMedia = new Request(`${baseURL}/api/auth/sign-in/email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain', Origin: baseURL },
+      body: '{}',
+    });
+
+    expect((await handleBetterAuthRequest(auth, missingOrigin, unusedSessionProvider)).status).toBe(
+      403,
+    );
+    expect((await handleBetterAuthRequest(auth, crossSite, unusedSessionProvider)).status).toBe(
+      403,
+    );
+    expect((await handleBetterAuthRequest(auth, wrongMedia, unusedSessionProvider)).status).toBe(
+      415,
+    );
+  });
+
+  it('atomically limits two auth instances and ignores forged forwarded IP headers', async () => {
+    const clientIp = '198.51.100.77';
+    const responses = await Promise.all(
+      Array.from({ length: 8 }, async (_value, index) => {
+        const authRequest = request(
+          '/api/auth/sign-up/email',
+          'POST',
+          {
+            email: `${randomUUID()}@example.cn`,
+            name: `限流用户${String(index)}`,
+            password: 'Strong-password-123',
+          },
+          undefined,
+          clientIp,
+        );
+        authRequest.headers.set('X-Forwarded-For', `203.0.113.${String(index + 1)}`);
+        const server = index % 2 === 0 ? auth : authPeer;
+        return handleBetterAuthRequest(
+          server,
+          authRequest,
+          new BetterAuthSessionProvider(server, applicationPool, authRequest.headers, schema),
+        );
+      }),
+    );
+
+    const accepted = responses.filter((response) => response.status === 200);
+    const limited = responses.filter((response) => response.status === 429);
+    expect(accepted).toHaveLength(5);
+    expect(limited).toHaveLength(3);
+    expect(limited.every((response) => Number(response.headers.get('retry-after')) > 0)).toBe(true);
+    const row = await migrationPool.query<{ count: number }>(
+      `select count from ${qualified('auth_rate_limits')} where key = $1`,
+      [`${clientIp}|/sign-up/email`],
+    );
+    expect(row.rows).toEqual([{ count: 5 }]);
   });
 });

@@ -45,8 +45,16 @@ afterAll(async () => {
 
 describe('initial database migration', () => {
   it('migrates an empty schema and is idempotent on the second run', () => {
-    expect(firstRun.applied).toEqual(['0001_initial.up.sql', '0002_auth_identity.up.sql']);
-    expect(secondRun.alreadyApplied).toEqual(['0001_initial.up.sql', '0002_auth_identity.up.sql']);
+    expect(firstRun.applied).toEqual([
+      '0001_initial.up.sql',
+      '0002_auth_identity.up.sql',
+      '0003_auth_rate_limit.up.sql',
+    ]);
+    expect(secondRun.alreadyApplied).toEqual([
+      '0001_initial.up.sql',
+      '0002_auth_identity.up.sql',
+      '0003_auth_rate_limit.up.sql',
+    ]);
   });
 
   it('creates the required business and auth tables', async () => {
@@ -57,6 +65,7 @@ describe('initial database migration', () => {
     expect(tables.rows.map((row) => row.table_name)).toEqual([
       'audit_events',
       'auth_accounts',
+      'auth_rate_limits',
       'auth_sessions',
       'auth_users',
       'auth_verifications',

@@ -108,6 +108,11 @@ describe('Better Auth V0.2 contract', () => {
             "database": {
               "generateId": "uuid",
             },
+            "ipAddress": {
+              "ipAddressHeaders": [
+                "x-resume-client-ip",
+              ],
+            },
           },
           "basePath": "/api/auth",
           "emailAndPassword": {
@@ -121,6 +126,38 @@ describe('Better Auth V0.2 contract', () => {
             "sendOnSignUp": true,
           },
           "plugins": [],
+          "rateLimit": {
+            "customRules": {
+              "/request-password-reset": {
+                "max": 20,
+                "window": 3600,
+              },
+              "/reset-password": {
+                "max": 20,
+                "window": 3600,
+              },
+              "/send-verification-email": {
+                "max": 20,
+                "window": 3600,
+              },
+              "/sign-in/email": {
+                "max": 10,
+                "window": 60,
+              },
+              "/sign-up/email": {
+                "max": 5,
+                "window": 3600,
+              },
+            },
+            "enabled": true,
+            "fields": {
+              "lastRequest": "last_request",
+            },
+            "max": 60,
+            "modelName": "auth_rate_limits",
+            "storage": "database",
+            "window": 60,
+          },
           "session": {
             "cookieCache": {
               "enabled": false,
@@ -164,6 +201,7 @@ describe('Better Auth V0.2 contract', () => {
   it('maps the standard models and UUID generation without a separate identity map', () => {
     expect(BETTER_AUTH_SCHEMA_MODELS).toEqual([
       'auth_accounts',
+      'auth_rate_limits',
       'auth_sessions',
       'auth_users',
       'auth_verifications',

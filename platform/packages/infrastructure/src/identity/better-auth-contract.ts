@@ -28,7 +28,25 @@ export const BETTER_AUTH_ENDPOINTS = [
 
 export const betterAuthCoreOptions = {
   basePath: '/api/auth',
-  advanced: { database: { generateId: BETTER_AUTH_DATABASE.generateId } },
+  advanced: {
+    database: { generateId: BETTER_AUTH_DATABASE.generateId },
+    ipAddress: { ipAddressHeaders: ['x-resume-client-ip'] },
+  },
+  rateLimit: {
+    enabled: true,
+    storage: 'database',
+    modelName: 'auth_rate_limits',
+    fields: { lastRequest: 'last_request' },
+    window: 60,
+    max: 60,
+    customRules: {
+      '/sign-in/email': { window: 60, max: 10 },
+      '/sign-up/email': { window: 60 * 60, max: 5 },
+      '/send-verification-email': { window: 60 * 60, max: 20 },
+      '/request-password-reset': { window: 60 * 60, max: 20 },
+      '/reset-password': { window: 60 * 60, max: 20 },
+    },
+  },
   user: {
     modelName: 'auth_users',
     fields: {

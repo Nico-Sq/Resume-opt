@@ -62,7 +62,14 @@ export function getBetterAuthServer() {
 }
 
 export function getRequestSessionProvider(requestHeaders: Headers) {
-  return new BetterAuthSessionProvider(getBetterAuthServer(), getApplicationPool(), requestHeaders);
+  const config = getServerRuntimeConfig();
+  return new BetterAuthSessionProvider(
+    getBetterAuthServer(),
+    getApplicationPool(),
+    requestHeaders,
+    'public',
+    config.BETTER_AUTH_SECRET,
+  );
 }
 
 export function getResumeForEditorUseCase() {

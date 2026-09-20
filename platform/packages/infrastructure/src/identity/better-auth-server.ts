@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+
 import {
   AuthenticationRequiredError,
   type AuthenticatedSession,
@@ -134,6 +136,32 @@ function tokenFreeBody(pathname: string, body: unknown): unknown {
   return body;
 }
 
+function rejectUnsafeAuthWrite(request: Request, baseURL: string): Response | null {
+  if (request.method !== 'POST') return null;
+  const origin = request.headers.get('origin');
+  if (origin !== new URL(baseURL).origin) {
+    return Response.json(
+      { code: 'AUTH_ORIGIN_FORBIDDEN' },
+      { status: 403, headers: { 'Cache-Control': 'private, no-store' } },
+    );
+  }
+  const fetchSite = request.headers.get('sec-fetch-site');
+  if (fetchSite && fetchSite !== 'same-origin') {
+    return Response.json(
+      { code: 'AUTH_CROSS_SITE_FORBIDDEN' },
+      { status: 403, headers: { 'Cache-Control': 'private, no-store' } },
+    );
+  }
+  const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (contentType !== 'application/json') {
+    return Response.json(
+      { code: 'AUTH_UNSUPPORTED_MEDIA_TYPE' },
+      { status: 415, headers: { 'Cache-Control': 'private, no-store' } },
+    );
+  }
+  return null;
+}
+
 export async function handleBetterAuthRequest(
   auth: BetterAuthServer,
   request: Request,
@@ -145,6 +173,9 @@ export async function handleBetterAuthRequest(
 
   const url = new URL(request.url);
   const { pathname } = url;
+  const authContext = await auth.$context;
+  const unsafeWrite = rejectUnsafeAuthWrite(request, authContext.baseURL);
+  if (unsafeWrite) return unsafeWrite;
   if (pathname === '/api/auth/get-session') {
     return Response.json(await sessionProvider.getSession(), {
       headers: { 'Cache-Control': 'private, no-store' },
@@ -156,11 +187,10 @@ export async function handleBetterAuthRequest(
     pathname === '/api/auth/verify-email' ||
     (request.method === 'GET' && pathname.startsWith('/api/auth/reset-password/'));
   if (callbackURL && hasCallback) {
-    const context = await auth.$context;
     let callbackIsTrusted = false;
     try {
       callbackIsTrusted =
-        new URL(callbackURL, context.baseURL).origin === new URL(context.baseURL).origin;
+        new URL(callbackURL, authContext.baseURL).origin === new URL(authContext.baseURL).origin;
     } catch {
       callbackIsTrusted = false;
     }
@@ -175,13 +205,12 @@ export async function handleBetterAuthRequest(
   let authRequest = request;
   if (pathname === '/api/auth/verify-email') {
     const token = url.searchParams.get('token');
-    const context = await auth.$context;
     if (token) {
       if (token.length > 4_096) {
         url.searchParams.set('token', 'invalid');
         authRequest = new Request(url, request);
       } else {
-        const verification = await context.internalAdapter.consumeVerificationValue(
+        const verification = await authContext.internalAdapter.consumeVerificationValue(
           `${EMAIL_VERIFICATION_PREFIX}${token}`,
         );
         if (!verification) {
@@ -195,6 +224,10 @@ export async function handleBetterAuthRequest(
   const response = await auth.handler(authRequest);
   const headers = new Headers(response.headers);
   headers.set('Cache-Control', 'private, no-store');
+  if (response.status === 429) {
+    const retryAfter = headers.get('x-retry-after');
+    if (retryAfter) headers.set('Retry-After', retryAfter);
+  }
   if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) {
     return new Response(response.body, { status: response.status, headers });
   }
@@ -214,9 +247,22 @@ export class BetterAuthSessionProvider implements SessionProvider, IdentityProvi
     private readonly applicationPool: Pool,
     private readonly requestHeaders: Headers,
     schema = 'public',
+    private readonly csrfSecret?: string,
   ) {
     if (!safeIdentifier.test(schema)) throw new Error('不安全的数据库 schema');
     this.#schema = schema;
+  }
+
+  async getCsrfToken(): Promise<string | null> {
+    if (!this.csrfSecret) throw new Error('CSRF 密钥未配置');
+    const result = await this.auth.api.getSession({
+      headers: this.requestHeaders,
+      query: { disableCookieCache: true, disableRefresh: true },
+    });
+    if (!result) return null;
+    return createHmac('sha256', this.csrfSecret)
+      .update(`resume-opt:csrf\0${result.session.token}`)
+      .digest('base64url');
   }
 
   async getSession(): Promise<AuthenticatedSession | null> {

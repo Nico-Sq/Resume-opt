@@ -5,6 +5,7 @@ import {
   check,
   foreignKey,
   index,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -97,6 +98,20 @@ export const authVerifications = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => [index('auth_verifications_identifier_idx').on(table.identifier)],
+);
+
+export const authRateLimits = pgTable(
+  'auth_rate_limits',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    key: text('key').notNull(),
+    count: integer('count').notNull(),
+    lastRequest: bigint('last_request', { mode: 'number' }).notNull(),
+  },
+  (table) => [
+    unique('auth_rate_limits_key_unique').on(table.key),
+    check('auth_rate_limits_count_check', sql`${table.count} >= 1`),
+  ],
 );
 
 export const templates = pgTable(
