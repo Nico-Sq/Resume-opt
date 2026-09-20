@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Client } from 'pg';
 
-const required = (name: 'PG_DEV_URL' | 'PG_MIGRATION_URL' | 'PG_TEST_URL'): string => {
+const required = (
+  name: 'PG_DEV_URL' | 'PG_AUTH_URL' | 'PG_MIGRATION_URL' | 'PG_TEST_URL',
+): string => {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required.`);
   return value;
@@ -21,9 +23,13 @@ const queryIdentity = async (connectionString: string) => {
   }
 };
 
-test('application, migration and test credentials target their assigned databases', async () => {
+test('application, auth, migration and test credentials target their assigned databases', async () => {
   assert.deepEqual(await queryIdentity(required('PG_DEV_URL')), {
     user_name: 'resume_opt_app',
+    database_name: 'resume_opt_dev',
+  });
+  assert.deepEqual(await queryIdentity(required('PG_AUTH_URL')), {
+    user_name: 'resume_opt_auth',
     database_name: 'resume_opt_dev',
   });
   assert.deepEqual(await queryIdentity(required('PG_MIGRATION_URL')), {

@@ -45,17 +45,21 @@ afterAll(async () => {
 
 describe('initial database migration', () => {
   it('migrates an empty schema and is idempotent on the second run', () => {
-    expect(firstRun.applied).toEqual(['0001_initial.up.sql']);
-    expect(secondRun.alreadyApplied).toEqual(['0001_initial.up.sql']);
+    expect(firstRun.applied).toEqual(['0001_initial.up.sql', '0002_auth_identity.up.sql']);
+    expect(secondRun.alreadyApplied).toEqual(['0001_initial.up.sql', '0002_auth_identity.up.sql']);
   });
 
-  it('creates the required V0.1 tables and constraints', async () => {
+  it('creates the required business and auth tables', async () => {
     const tables = await migrationPool.query<{ table_name: string }>(
       `select table_name from information_schema.tables where table_schema = $1 order by table_name`,
       [schema],
     );
     expect(tables.rows.map((row) => row.table_name)).toEqual([
       'audit_events',
+      'auth_accounts',
+      'auth_sessions',
+      'auth_users',
+      'auth_verifications',
       'idempotency_requests',
       'resume_versions',
       'resumes',

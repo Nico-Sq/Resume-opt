@@ -132,12 +132,6 @@ for (const [database, user, rolePassword] of [
   await client.query('REVOKE CREATE ON SCHEMA public FROM PUBLIC');
   if (database === 'resume_opt_dev') {
     await client.query('GRANT USAGE ON SCHEMA public TO resume_opt_app, resume_opt_auth');
-    await client.query(
-      'ALTER DEFAULT PRIVILEGES FOR ROLE resume_opt_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO resume_opt_app',
-    );
-    await client.query(
-      'ALTER DEFAULT PRIVILEGES FOR ROLE resume_opt_migrator IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO resume_opt_app',
-    );
   }
   await client.end();
 }

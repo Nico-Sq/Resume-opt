@@ -58,12 +58,6 @@ async function configureDatabase(
         throw new Error('开发库必须由 resume_opt_migrator 配置');
       }
       await pool.query('GRANT USAGE ON SCHEMA public TO resume_opt_app, resume_opt_auth');
-      await pool.query(
-        'ALTER DEFAULT PRIVILEGES FOR ROLE resume_opt_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO resume_opt_app',
-      );
-      await pool.query(
-        'ALTER DEFAULT PRIVILEGES FOR ROLE resume_opt_migrator IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO resume_opt_app',
-      );
     }
   } finally {
     await pool.end();
