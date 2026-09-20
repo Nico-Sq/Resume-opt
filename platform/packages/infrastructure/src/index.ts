@@ -2,6 +2,13 @@ export { checkDatabaseReadiness, createPostgresPool, type DatabasePoolOptions } 
 export { runMigrations, type MigrationResult } from './database/migrations';
 export { FixedIdentityProvider } from './identity/fixed-identity';
 export {
+  BetterAuthSessionProvider,
+  createBetterAuthServer,
+  handleBetterAuthRequest,
+  type BetterAuthServer,
+  type BetterAuthServerOptions,
+} from './identity/better-auth-server';
+export {
   BETTER_AUTH_CLI_VERSION,
   BETTER_AUTH_DATABASE,
   BETTER_AUTH_ENDPOINTS,

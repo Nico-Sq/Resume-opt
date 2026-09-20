@@ -90,6 +90,18 @@ describe('Better Auth V0.2 contract', () => {
         "library": "1.7.5",
         "options": {
           "account": {
+            "fields": {
+              "accessToken": "access_token",
+              "accessTokenExpiresAt": "access_token_expires_at",
+              "accountId": "account_id",
+              "createdAt": "created_at",
+              "idToken": "id_token",
+              "providerId": "provider_id",
+              "refreshToken": "refresh_token",
+              "refreshTokenExpiresAt": "refresh_token_expires_at",
+              "updatedAt": "updated_at",
+              "userId": "user_id",
+            },
             "modelName": "auth_accounts",
           },
           "advanced": {
@@ -115,14 +127,32 @@ describe('Better Auth V0.2 contract', () => {
             },
             "disableSessionRefresh": true,
             "expiresIn": 604800,
+            "fields": {
+              "createdAt": "created_at",
+              "expiresAt": "expires_at",
+              "ipAddress": "ip_address",
+              "updatedAt": "updated_at",
+              "userAgent": "user_agent",
+              "userId": "user_id",
+            },
             "freshAge": 600,
             "modelName": "auth_sessions",
           },
           "socialProviders": {},
           "user": {
+            "fields": {
+              "createdAt": "created_at",
+              "emailVerified": "email_verified",
+              "updatedAt": "updated_at",
+            },
             "modelName": "auth_users",
           },
           "verification": {
+            "fields": {
+              "createdAt": "created_at",
+              "expiresAt": "expires_at",
+              "updatedAt": "updated_at",
+            },
             "modelName": "auth_verifications",
             "storeIdentifier": "hashed",
           },

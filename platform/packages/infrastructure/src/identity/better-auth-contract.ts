@@ -29,16 +29,53 @@ export const BETTER_AUTH_ENDPOINTS = [
 export const betterAuthCoreOptions = {
   basePath: '/api/auth',
   advanced: { database: { generateId: BETTER_AUTH_DATABASE.generateId } },
-  user: { modelName: 'auth_users' },
+  user: {
+    modelName: 'auth_users',
+    fields: {
+      emailVerified: 'email_verified',
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+    },
+  },
   session: {
     modelName: 'auth_sessions',
+    fields: {
+      expiresAt: 'expires_at',
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+      ipAddress: 'ip_address',
+      userAgent: 'user_agent',
+      userId: 'user_id',
+    },
     expiresIn: 60 * 60 * 24 * 7,
     disableSessionRefresh: true,
     freshAge: 60 * 10,
     cookieCache: { enabled: false },
   },
-  account: { modelName: 'auth_accounts' },
-  verification: { modelName: 'auth_verifications', storeIdentifier: 'hashed' },
+  account: {
+    modelName: 'auth_accounts',
+    fields: {
+      accountId: 'account_id',
+      providerId: 'provider_id',
+      userId: 'user_id',
+      accessToken: 'access_token',
+      refreshToken: 'refresh_token',
+      idToken: 'id_token',
+      accessTokenExpiresAt: 'access_token_expires_at',
+      refreshTokenExpiresAt: 'refresh_token_expires_at',
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+    },
+  },
+  verification: {
+    modelName: 'auth_verifications',
+    fields: {
+      expiresAt: 'expires_at',
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+    },
+    storeIdentifier: 'hashed',
+  },
   emailVerification: { sendOnSignUp: true, expiresIn: 60 * 60 * 24 },
   emailAndPassword: {
     enabled: true,
@@ -52,14 +89,17 @@ export const betterAuthCoreOptions = {
 
 export const BETTER_AUTH_SCHEMA_MODELS = Object.keys(getSchema(betterAuthCoreOptions)).sort();
 
-export function createBetterAuthOptions(dialect: Dialect): BetterAuthOptions {
+export function createBetterAuthOptions(
+  dialect: Dialect,
+  schemaName: string = BETTER_AUTH_DATABASE.schemaName,
+): BetterAuthOptions {
   return {
     ...betterAuthCoreOptions,
     database: {
       dialect,
       type: BETTER_AUTH_DATABASE.type,
       casing: BETTER_AUTH_DATABASE.casing,
-      schemaName: BETTER_AUTH_DATABASE.schemaName,
+      schemaName,
       transaction: BETTER_AUTH_DATABASE.transaction,
     },
   };

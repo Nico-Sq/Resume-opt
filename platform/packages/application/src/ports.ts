@@ -4,6 +4,15 @@ export interface CurrentIdentity {
   userId: string;
 }
 
+export class AuthenticationRequiredError extends Error {
+  readonly code = 'AUTHENTICATION_REQUIRED';
+
+  constructor() {
+    super('需要登录');
+    this.name = 'AuthenticationRequiredError';
+  }
+}
+
 export interface IdentityProvider {
   requireIdentity(): Promise<CurrentIdentity>;
 }

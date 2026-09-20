@@ -30,3 +30,4 @@ export type {
   UserTransaction,
   UserTransactionManager,
 } from './ports';
+export { AuthenticationRequiredError } from './ports';
