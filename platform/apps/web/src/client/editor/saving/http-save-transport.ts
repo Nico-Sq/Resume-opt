@@ -90,7 +90,10 @@ function classifyHttpFailure(
 }
 
 export class HttpSaveTransport implements SaveTransport {
-  constructor(private readonly fetchImplementation: FetchImplementation = defaultFetch) {}
+  constructor(
+    private readonly fetchImplementation: FetchImplementation = defaultFetch,
+    private readonly csrfToken?: string,
+  ) {}
 
   async save(envelope: PendingSaveEnvelope, signal?: AbortSignal): Promise<SaveReceipt> {
     const relativeEndpoint = `/api/v1/resumes/${encodeURIComponent(envelope.resumeId)}/document`;
@@ -104,6 +107,7 @@ export class HttpSaveTransport implements SaveTransport {
           'Content-Type': 'application/json',
           'Idempotency-Key': envelope.idempotencyKey,
           'If-Match': `"${envelope.baseRevision}"`,
+          ...(this.csrfToken ? { 'X-CSRF-Token': this.csrfToken } : {}),
         },
         body: JSON.stringify({
           document: envelope.document,

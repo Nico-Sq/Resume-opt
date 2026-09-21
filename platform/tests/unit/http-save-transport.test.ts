@@ -82,7 +82,8 @@ describe('HttpSaveTransport', () => {
         ),
       );
     };
-    const transport = new HttpSaveTransport(fetchImplementation);
+    const csrfToken = 'c'.repeat(43);
+    const transport = new HttpSaveTransport(fetchImplementation, csrfToken);
 
     await expect(transport.save(requestEnvelope)).resolves.toEqual(receipt);
     expect(capturedUrl).toBe(`/api/v1/resumes/${requestEnvelope.resumeId}/document`);
@@ -90,6 +91,7 @@ describe('HttpSaveTransport', () => {
     const headers = new Headers(capturedInit?.headers);
     expect(headers.get('Idempotency-Key')).toBe(requestEnvelope.idempotencyKey);
     expect(headers.get('If-Match')).toBe('"7"');
+    expect(headers.get('X-CSRF-Token')).toBe(csrfToken);
     expect(capturedInit?.body).toBe(
       JSON.stringify({
         document: requestEnvelope.document,

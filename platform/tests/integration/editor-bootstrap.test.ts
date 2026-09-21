@@ -35,6 +35,11 @@ const seed = {
   versionId: '40000000-0000-4000-8000-000000000003',
   schema,
 };
+const secondSeed = {
+  ...seed,
+  resumeId: '40000000-0000-4000-8000-000000000004',
+  versionId: '40000000-0000-4000-8000-000000000005',
+};
 
 beforeAll(async () => {
   await migrationPool.query(`create schema "${schema}" authorization resume_opt_migrator`);
@@ -80,6 +85,21 @@ describe('fixed editor bootstrap', () => {
       Object.values(result.document.sectionsById).find((section) => section.kind === 'intent')
         ?.entries[0],
     ).toMatchObject({ targetRole: '前端开发工程师' });
+  });
+
+  it('reads two distinct resumes owned by the same user', async () => {
+    await seedFixedResume(migrationPool, secondSeed);
+    await migrationPool.query(`update "${schema}".resumes set title = '第二份简历' where id = $1`, [
+      secondSeed.resumeId,
+    ]);
+
+    const [first, second] = await Promise.all([
+      useCaseFor(seed.userId).execute(seed.resumeId),
+      useCaseFor(seed.userId).execute(secondSeed.resumeId),
+    ]);
+
+    expect(first.id).toBe(seed.resumeId);
+    expect(second).toMatchObject({ id: secondSeed.resumeId, title: '第二份简历' });
   });
 
   it('returns the same 404 class for another owner and a missing resource', async () => {

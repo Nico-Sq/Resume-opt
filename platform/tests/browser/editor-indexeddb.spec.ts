@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -5,6 +6,8 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const DATABASE_NAME = 'resume-opt-local-drafts-v1';
 const SAMPLE_COUNT = 50;
+const FIXED_RESUME_ID = '00000000-0000-4000-8000-000000000002';
+const SECOND_RESUME_ID = randomUUID();
 
 interface BrowserSample {
   fieldToPreviewMs: number;
@@ -128,6 +131,46 @@ async function updateNameAndMeasure(nameInput: Locator, name: string): Promise<B
     ackedSeq: draft.ackedSeq,
   };
 }
+
+test('动态编辑路由支持两份本人简历、刷新和后退且私有响应不缓存', async ({ page }) => {
+  await page.goto('/');
+  await expect(page).toHaveURL(new RegExp(`/resumes/${FIXED_RESUME_ID}/edit$`, 'u'));
+  await expect(page.getByText('张三的简历', { exact: true })).toBeVisible();
+
+  const firstApi = await page.request.get(`/api/v1/resumes/${FIXED_RESUME_ID}`);
+  expect(firstApi.status()).toBe(200);
+  expect(firstApi.headers()['cache-control']).toContain('no-store');
+  const secondPayload = (await firstApi.json()) as {
+    data: { id: string; title: string; revision: string };
+    traceId: string;
+  };
+  secondPayload.data.id = SECOND_RESUME_ID;
+  secondPayload.data.title = '第二份测试简历';
+  await page.route(`**/api/v1/resumes/${SECOND_RESUME_ID}`, async (route) => {
+    await route.fulfill({
+      body: JSON.stringify(secondPayload),
+      contentType: 'application/json',
+      headers: { 'Cache-Control': 'private, no-store', ETag: `"${secondPayload.data.revision}"` },
+      status: 200,
+    });
+  });
+
+  await page.goto(`/resumes/${SECOND_RESUME_ID}/edit`);
+  await expect(page.getByText('第二份测试简历', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('第二份测试简历', { exact: true })).toBeVisible();
+
+  await page.goBack();
+  await expect(page.getByText('张三的简历', { exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(page.getByText('第二份测试简历', { exact: true })).toBeVisible();
+
+  const shell = await page.request.get(`/resumes/${SECOND_RESUME_ID}/edit`);
+  expect(await shell.text()).not.toContain('第二份测试简历');
+  const missingId = randomUUID();
+  await page.goto(`/resumes/${missingId}/edit`);
+  await expect(page.getByText('简历不存在或无权访问', { exact: true })).toBeVisible();
+});
 
 test('滚动只归属编辑器内部且普通长页面可以滚动', async ({ page }) => {
   const viewports = [
