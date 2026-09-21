@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { IdempotencyKeyReusedError, RevisionConflictError } from '@resume/application';
+import {
+  AuthenticationRequiredError,
+  IdempotencyKeyReusedError,
+  RevisionConflictError,
+} from '@resume/application';
 import { createInitialResumeDocument } from '@resume/domain/resume';
 import { respondToSaveResume } from '../../apps/web/src/server/http/save-resume-response';
 
@@ -108,6 +112,18 @@ describe('save resume HTTP boundary', () => {
     expect(reused.status).toBe(409);
     expect(await reused.json()).toMatchObject({
       code: 'IDEMPOTENCY_KEY_REUSED',
+      retryable: false,
+    });
+  });
+
+  it('returns 401 when the request identity is absent', async () => {
+    const response = await respondToSaveResume(request(), resumeId, {
+      execute: () => Promise.reject(new AuthenticationRequiredError()),
+    });
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({
+      code: 'AUTHENTICATION_REQUIRED',
       retryable: false,
     });
   });

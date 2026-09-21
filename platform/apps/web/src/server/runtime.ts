@@ -9,6 +9,7 @@ import {
 } from '@resume/infrastructure/better-auth-server';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
 import { PostgresUserTransactionManager } from '@resume/infrastructure/resume-transactions';
+import type { IdentityProvider } from '@resume/application';
 
 let applicationPool: ReturnType<typeof createPostgresPool> | undefined;
 let authPool: ReturnType<typeof createPostgresPool> | undefined;
@@ -72,30 +73,28 @@ export function getRequestSessionProvider(requestHeaders: Headers) {
   );
 }
 
-export function getResumeForEditorUseCase() {
+function getRequestIdentityProvider(requestHeaders: Headers): IdentityProvider {
   const config = getServerRuntimeConfig();
-  if (config.AUTH_MODE !== 'fixed' || !config.DEV_FIXED_USER_ID) {
-    throw new Error('V0.1 尚未配置真实认证适配器');
+  if (config.AUTH_MODE === 'better-auth') return getRequestSessionProvider(requestHeaders);
+  if (!config.DEV_FIXED_USER_ID) {
+    throw new Error('固定身份未配置');
   }
+  return new FixedIdentityProvider({
+    appEnvironment: config.APP_ENV,
+    userId: config.DEV_FIXED_USER_ID,
+  });
+}
+
+export function getResumeForEditorUseCase(requestHeaders: Headers) {
   return new GetResumeForEditor(
-    new FixedIdentityProvider({
-      appEnvironment: config.APP_ENV,
-      userId: config.DEV_FIXED_USER_ID,
-    }),
+    getRequestIdentityProvider(requestHeaders),
     new PostgresUserTransactionManager(getApplicationPool()),
   );
 }
 
-export function getSaveResumeDocumentUseCase() {
-  const config = getServerRuntimeConfig();
-  if (config.AUTH_MODE !== 'fixed' || !config.DEV_FIXED_USER_ID) {
-    throw new Error('V0.1 尚未配置真实认证适配器');
-  }
+export function getSaveResumeDocumentUseCase(requestHeaders: Headers) {
   return new SaveResumeDocument(
-    new FixedIdentityProvider({
-      appEnvironment: config.APP_ENV,
-      userId: config.DEV_FIXED_USER_ID,
-    }),
+    getRequestIdentityProvider(requestHeaders),
     new PostgresUserTransactionManager(getApplicationPool()),
   );
 }

@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { GetResumeForEditor, SaveResumeDocument } from '@resume/application';
 import { parseDatabaseToolConfig } from '@resume/config/server';
 import {
   BetterAuthSessionProvider,
@@ -13,6 +14,10 @@ import {
 } from '@resume/infrastructure/better-auth-server';
 import { runMigrations } from '@resume/infrastructure/migrations';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
+import { PostgresUserTransactionManager } from '@resume/infrastructure/resume-transactions';
+import { seedFixedResume } from '@resume/infrastructure/resume-seed';
+import { respondWithResume } from '../../apps/web/src/server/http/resume-response';
+import { respondToSaveResume } from '../../apps/web/src/server/http/save-resume-response';
 
 const migration = parseDatabaseToolConfig({ ...process.env, APP_ENV: 'test' }, 'migration');
 const authConnectionString = process.env.PG_AUTH_URL;
@@ -37,7 +42,7 @@ const authPool = createPostgresPool({
 });
 const applicationPool = createPostgresPool({
   connectionString: appConnectionString,
-  max: 3,
+  max: 1,
   applicationName: 'resume-opt-session-identity-test',
 });
 const mailbox = new InMemoryAuthMailbox();
@@ -575,6 +580,147 @@ describe('Better Auth real PostgreSQL handler and sessions', () => {
       [userB.id],
     );
     expect(await providerB.getSession()).toBeNull();
+  });
+
+  it('isolates existing resume read and save APIs for two real accounts', async () => {
+    const emailA = `${randomUUID()}@example.cn`;
+    const emailB = `${randomUUID()}@example.cn`;
+    const [userA, userB] = await Promise.all([
+      register(emailA, '业务用户A'),
+      register(emailB, '业务用户B'),
+    ]);
+    await Promise.all([verifyEmail(emailA), verifyEmail(emailB)]);
+    const [cookieA, cookieB] = await Promise.all([verifyAndLogin(emailA), verifyAndLogin(emailB)]);
+    const resumeA = randomUUID();
+    const resumeB = randomUUID();
+    await seedFixedResume(migrationPool, {
+      userId: userA.id,
+      resumeId: resumeA,
+      versionId: randomUUID(),
+      schema,
+    });
+    await seedFixedResume(migrationPool, {
+      userId: userB.id,
+      resumeId: resumeB,
+      versionId: randomUUID(),
+      schema,
+    });
+
+    const providerA = new BetterAuthSessionProvider(
+      auth,
+      applicationPool,
+      new Headers({ Cookie: cookieA }),
+      schema,
+      authSecret,
+    );
+    const providerB = new BetterAuthSessionProvider(
+      auth,
+      applicationPool,
+      new Headers({ Cookie: cookieB }),
+      schema,
+      authSecret,
+    );
+    const transactions = new PostgresUserTransactionManager(applicationPool, schema);
+    const readA = new GetResumeForEditor(providerA, transactions);
+    const readB = new GetResumeForEditor(providerB, transactions);
+    const saveA = new SaveResumeDocument(providerA, transactions);
+    const ownRead = await respondWithResume(
+      new Request(`${baseURL}/api/v1/resumes/${resumeA}`, {
+        headers: { Cookie: cookieA },
+      }),
+      resumeA,
+      readA,
+    );
+    const otherRead = await respondWithResume(
+      new Request(`${baseURL}/api/v1/resumes/${resumeB}`, {
+        headers: { Cookie: cookieA },
+      }),
+      resumeB,
+      readA,
+    );
+    const missingRead = await respondWithResume(
+      new Request(`${baseURL}/api/v1/resumes/${resumeA}`),
+      resumeA,
+      new GetResumeForEditor(
+        new BetterAuthSessionProvider(auth, applicationPool, new Headers(), schema),
+        transactions,
+      ),
+    );
+
+    expect(ownRead.status).toBe(200);
+    expect(otherRead.status).toBe(404);
+    const otherReadBody = (await otherRead.json()) as Record<string, unknown>;
+    expect(otherReadBody).toMatchObject({ code: 'RESOURCE_NOT_FOUND' });
+    expect(JSON.stringify(otherReadBody)).not.toMatch(/revision/iu);
+    expect(missingRead.status).toBe(401);
+
+    const ownDto = (await ownRead.json()) as {
+      data: { document: Record<string, unknown> };
+    };
+    const saveRequest = (resumeId: string, document: Record<string, unknown>) =>
+      new Request(`${baseURL}/api/v1/resumes/${resumeId}/document`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': randomUUID(),
+          'If-Match': '"1"',
+          Origin: baseURL,
+          Cookie: cookieA,
+        },
+        body: JSON.stringify({ document, clientSeq: 7 }),
+      });
+    const ownSave = await respondToSaveResume(
+      saveRequest(resumeA, ownDto.data.document),
+      resumeA,
+      saveA,
+    );
+    const otherDto = await readB.execute(resumeB);
+    const otherSave = await respondToSaveResume(
+      saveRequest(resumeB, otherDto.document),
+      resumeB,
+      saveA,
+    );
+
+    expect(ownSave.status).toBe(200);
+    expect(await ownSave.json()).toMatchObject({
+      data: {
+        resumeId: resumeA,
+        revision: '2',
+        acknowledgedSeq: 7,
+        versionId: expect.any(String) as string,
+        savedAt: expect.any(String) as string,
+        contentHash: expect.any(String) as string,
+      },
+    });
+    expect(otherSave.status).toBe(404);
+    expect(JSON.stringify(await otherSave.json())).not.toMatch(/revision/iu);
+
+    const bypassRlsRead = new GetResumeForEditor(
+      providerA,
+      new PostgresUserTransactionManager(migrationPool, schema),
+    );
+    await expect(bypassRlsRead.execute(resumeB)).rejects.toThrow('资源不存在');
+
+    const unchanged = await migrationPool.query<{ revision: string; versions: number }>(
+      `select r.revision::text,
+              (select count(*)::int from ${qualified('resume_versions')} v where v.resume_id = r.id) as versions
+         from ${qualified('resumes')} r where r.id = $1`,
+      [resumeB],
+    );
+    expect(unchanged.rows).toEqual([{ revision: '1', versions: 1 }]);
+
+    await migrationPool.query(
+      `update ${qualified('users')} set status = 'disabled' where id = $1`,
+      [userA.id],
+    );
+    const disabledRead = await respondWithResume(
+      new Request(`${baseURL}/api/v1/resumes/${resumeA}`, {
+        headers: { Cookie: cookieA },
+      }),
+      resumeA,
+      readA,
+    );
+    expect(disabledRead.status).toBe(401);
   });
 
   it('rejects unsafe auth writes before account lookup', async () => {

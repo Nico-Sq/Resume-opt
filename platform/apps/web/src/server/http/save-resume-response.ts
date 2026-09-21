@@ -1,4 +1,5 @@
 import {
+  AuthenticationRequiredError,
   IdempotencyKeyReusedError,
   IdempotencyRequestInProgressError,
   InvalidSaveRequestError,
@@ -12,7 +13,12 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { errorResponse, traceIdFrom } from './api-response';
-import { getSaveResumeDocumentUseCase } from '../runtime';
+import { rejectUnsafeCookieWrite } from './csrf-response';
+import {
+  getRequestSessionProvider,
+  getSaveResumeDocumentUseCase,
+  getServerRuntimeConfig,
+} from '../runtime';
 
 const MAX_JSON_BYTES = 1_048_576;
 const ResumeIdSchema = z.uuid();
@@ -61,9 +67,22 @@ class InvalidJsonError extends Error {}
 export async function respondToSaveResume(
   request: Request,
   resumeId: string,
-  executor: SaveExecutor = getSaveResumeDocumentUseCase(),
+  executor?: SaveExecutor,
 ) {
   const traceId = traceIdFrom(request);
+  if (!executor) {
+    const config = getServerRuntimeConfig();
+    if (config.AUTH_MODE === 'better-auth') {
+      if (!config.BETTER_AUTH_URL) throw new Error('真实身份服务未配置');
+      const rejected = await rejectUnsafeCookieWrite(
+        request,
+        config.BETTER_AUTH_URL,
+        getRequestSessionProvider(request.headers),
+      );
+      if (rejected) return rejected;
+    }
+    executor = getSaveResumeDocumentUseCase(request.headers);
+  }
   if (!ResumeIdSchema.safeParse(resumeId).success) {
     return errorResponse(400, 'INVALID_RESOURCE_ID', '简历 ID 格式无效', traceId);
   }
@@ -125,6 +144,9 @@ export async function respondToSaveResume(
     if (result.replayed) headers['Idempotency-Replayed'] = 'true';
     return NextResponse.json({ data: result.receipt, traceId }, { headers });
   } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      return errorResponse(401, error.code, error.message, traceId);
+    }
     if (error instanceof InvalidSaveRequestError) {
       return errorResponse(422, error.code, error.message, traceId, {
         fieldErrors: error.fieldErrors,

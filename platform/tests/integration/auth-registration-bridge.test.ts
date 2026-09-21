@@ -22,6 +22,10 @@ const authRateLimitDownMigrationPath = resolve(
   migrationsDirectory,
   '0003_auth_rate_limit.down.sql',
 );
+const businessRlsDownMigrationPath = resolve(
+  migrationsDirectory,
+  '0004_active_business_rls.down.sql',
+);
 const migrationPool = createPostgresPool({
   connectionString: migration.connectionString,
   max: 1,
@@ -162,7 +166,11 @@ afterAll(async () => {
 describe('Better Auth shared UUID migration', () => {
   it('upgrades a populated V0.1 schema without changing legacy owners or content hashes', async () => {
     expect(migrationResult).toEqual({
-      applied: ['0002_auth_identity.up.sql', '0003_auth_rate_limit.up.sql'],
+      applied: [
+        '0002_auth_identity.up.sql',
+        '0003_auth_rate_limit.up.sql',
+        '0004_active_business_rls.up.sql',
+      ],
       alreadyApplied: ['0001_initial.up.sql'],
     });
     expect(await legacyState()).toEqual(legacySnapshot);
@@ -314,10 +322,12 @@ describe('Better Auth shared UUID migration', () => {
       await runMigrations(migrationPool, migrationsDirectory, downSchema);
       const downSql = await readFile(authDownMigrationPath, 'utf8');
       const rateLimitDownSql = await readFile(authRateLimitDownMigrationPath, 'utf8');
+      const businessRlsDownSql = await readFile(businessRlsDownMigrationPath, 'utf8');
       const client = await migrationPool.connect();
       try {
         await client.query('begin');
         await client.query(`set local search_path to "${downSchema}", public`);
+        await client.query(businessRlsDownSql);
         await client.query(rateLimitDownSql);
         await client.query(downSql);
         await client.query('commit');
