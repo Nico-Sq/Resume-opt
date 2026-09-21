@@ -18,7 +18,7 @@ import {
   type EditorResume,
 } from './editor-workspace';
 import styles from './editor-workspace.module.css';
-import { HttpSaveTransport } from './saving';
+import { HttpRenameTransport, HttpSaveTransport } from './saving';
 
 const EditorResponseSchema = z.object({
   data: z.object({
@@ -47,6 +47,7 @@ type LoadState =
       resume: EditorResume;
       localDraft: EditorLocalDraftContext;
       saveTransport: HttpSaveTransport;
+      renameTransport: HttpRenameTransport;
       accountUserId: string;
     }
   | { status: 'error'; message: string };
@@ -60,6 +61,7 @@ async function loadEditorResume(
   resume: EditorResume;
   localDraft: EditorLocalDraftContext;
   saveTransport: HttpSaveTransport;
+  renameTransport: HttpRenameTransport;
   accountUserId: string;
 }> {
   let userId = fixedUserId;
@@ -124,6 +126,7 @@ async function loadEditorResume(
       ...(initialError ? { initialError } : {}),
     },
     saveTransport: new HttpSaveTransport(undefined, csrfToken),
+    renameTransport: new HttpRenameTransport(undefined, csrfToken),
     accountUserId: userId,
   };
 }
@@ -143,12 +146,13 @@ export function EditorEntry({
   useEffect(() => {
     const controller = new AbortController();
     void loadEditorResume(resumeId, fixedUserId, csrfRequired, controller.signal).then(
-      ({ resume, localDraft, saveTransport, accountUserId }) => {
+      ({ resume, localDraft, saveTransport, renameTransport, accountUserId }) => {
         setState({
           status: 'ready',
           resume,
           localDraft,
           saveTransport,
+          renameTransport,
           accountUserId,
         });
       },
@@ -172,6 +176,7 @@ export function EditorEntry({
         canSignOut={csrfRequired}
         initialResume={state.resume}
         localDraft={state.localDraft}
+        renameTransport={state.renameTransport}
         saveTransport={state.saveTransport}
       />
     );

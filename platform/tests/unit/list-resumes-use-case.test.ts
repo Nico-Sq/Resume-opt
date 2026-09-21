@@ -37,6 +37,7 @@ function harness(records: ResumeMetadataRecord[], currentUserId = userId) {
           create: () => Promise.reject(new Error('本测试不调用创建')),
           findActiveById: () => Promise.resolve(null),
           listActive,
+          rename: () => Promise.reject(new Error('本测试不调用重命名')),
           saveDocument: () => Promise.reject(new Error('本测试不调用保存')),
         },
       });

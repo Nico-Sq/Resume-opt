@@ -39,6 +39,7 @@ export interface ResumeEditorActions {
   undo: () => boolean;
   redo: () => boolean;
   acknowledge: (receipt: { clientSeq: number; revision: string }) => boolean;
+  advanceRevision: (receipt: { baseRevision: string; revision: string }) => boolean;
   hydrateWorkingCopy: (snapshot: {
     document: ResumeDocumentV1;
     localSeq: number;
@@ -222,6 +223,19 @@ export function createResumeEditorStore(options: CreateResumeEditorStoreOptions)
           ackRevision: revision,
           isDirty: state.localSeq > clientSeq,
         });
+        return true;
+      },
+      advanceRevision: ({ baseRevision, revision }) => {
+        const state = get();
+        if (
+          state.isDirty ||
+          state.ackRevision !== baseRevision ||
+          !/^[1-9]\d*$/u.test(revision) ||
+          BigInt(revision) !== BigInt(baseRevision) + 1n
+        ) {
+          return false;
+        }
+        set({ ackRevision: revision });
         return true;
       },
       hydrateWorkingCopy: (snapshot) => {

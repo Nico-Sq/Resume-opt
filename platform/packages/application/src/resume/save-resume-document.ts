@@ -63,7 +63,7 @@ export class IdempotencyKeyReusedError extends Error {
   readonly code = 'IDEMPOTENCY_KEY_REUSED';
 
   constructor() {
-    super('幂等键已用于不同的保存请求');
+    super('幂等键已用于不同请求');
     this.name = 'IdempotencyKeyReusedError';
   }
 }
@@ -72,7 +72,7 @@ export class IdempotencyRequestInProgressError extends Error {
   readonly code = 'IDEMPOTENCY_REQUEST_IN_PROGRESS';
 
   constructor() {
-    super('相同保存请求仍在处理中');
+    super('相同请求仍在处理中');
     this.name = 'IdempotencyRequestInProgressError';
   }
 }

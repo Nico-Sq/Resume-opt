@@ -112,8 +112,37 @@ export interface SaveResumeResult {
   replayed: boolean;
 }
 
+export interface RenameResumeCommand {
+  resumeId: string;
+  idempotencyKey: string;
+  baseRevision: string;
+  title: string;
+  traceId: string;
+}
+
+export interface RenameResumeReceipt {
+  resume: {
+    id: string;
+    title: string;
+    locale: string;
+    stage: ResumeDocumentV1['stage'];
+    revision: string;
+    templateId: string;
+    templateVersion: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+  versionId: string;
+}
+
+export interface RenameResumeResult {
+  receipt: RenameResumeReceipt;
+  replayed: boolean;
+}
+
 export interface ResumeWriter {
   create(command: CreateResumeCommand): Promise<CreateResumeResult>;
+  rename(command: RenameResumeCommand): Promise<RenameResumeResult>;
   saveDocument(command: SaveResumeCommand): Promise<SaveResumeResult>;
 }
 

@@ -277,6 +277,16 @@ export class LocalDraftController {
     });
   }
 
+  async advanceRevision(baseRevision: string, revision: string): Promise<boolean> {
+    const state = this.options.store.getState();
+    if (this.#pendingEnvelope || state.isDirty) return false;
+    if (!state.advanceRevision({ baseRevision, revision })) return false;
+    this.#baseRevision = revision;
+    this.#baseSnapshot = state.document;
+    await this.flush();
+    return true;
+  }
+
   async discardPending(idempotencyKey: string): Promise<boolean> {
     if (this.#pendingEnvelope?.idempotencyKey !== idempotencyKey) return false;
     this.#pendingEnvelope = null;

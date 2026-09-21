@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { CreateResumeMode, IdentityProvider, UserTransactionManager } from '../ports';
 import { toResumeEditorDto, type ResumeEditorDto } from './get-resume-for-editor';
 
-const TitleSchema = z
+export const ResumeTitleSchema = z
   .string()
   .transform((value) => value.trim())
   .refine((value) => Array.from(value).length >= 1 && Array.from(value).length <= 200, {
@@ -12,7 +12,7 @@ const TitleSchema = z
   });
 const CreateResumeInputSchema = z.strictObject({
   idempotencyKey: z.uuid(),
-  title: TitleSchema,
+  title: ResumeTitleSchema,
   stage: z.enum(['student', 'employed', 'transition']),
   mode: z.enum(['blank', 'basic-template']),
   traceId: z.uuid(),

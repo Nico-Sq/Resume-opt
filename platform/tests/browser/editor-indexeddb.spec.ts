@@ -185,6 +185,46 @@ test('动态编辑路由支持两份本人简历、刷新和后退且私有响�
   await expect(page.getByText('简历不存在或无权访问', { exact: true })).toBeVisible();
 });
 
+test('重命名与正文共用 revision，刷新回读不改变正文', async ({ page }) => {
+  await page.goto('/');
+  const beforeResponse = await page.request.get(`/api/v1/resumes/${FIXED_RESUME_ID}`);
+  expect(beforeResponse.status()).toBe(200);
+  const before = (await beforeResponse.json()) as {
+    data: { title: string; revision: string; document: unknown };
+  };
+  const renamedTitle = `浏览器重命名-${String(Date.now())}🙂`;
+
+  await page.getByTitle('重命名简历').click();
+  const dialog = page.getByRole('dialog', { name: '重命名简历' });
+  await dialog.getByRole('textbox', { name: '简历名称' }).fill(renamedTitle);
+  await dialog.getByRole('button', { name: '保存名称' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTitle('重命名简历')).toContainText(renamedTitle);
+  await page.reload();
+  await expect(page.getByTitle('重命名简历')).toContainText(renamedTitle);
+
+  const renamedResponse = await page.request.get(`/api/v1/resumes/${FIXED_RESUME_ID}`);
+  const renamed = (await renamedResponse.json()) as typeof before;
+  expect(renamed.data).toMatchObject({
+    title: renamedTitle,
+    revision: String(BigInt(before.data.revision) + 1n),
+    document: before.data.document,
+  });
+
+  await page.getByTitle('重命名简历').click();
+  await page
+    .getByRole('dialog', { name: '重命名简历' })
+    .getByRole('textbox', { name: '简历名称' })
+    .fill(before.data.title);
+  await page
+    .getByRole('dialog', { name: '重命名简历' })
+    .getByRole('button', { name: '保存名称' })
+    .click();
+  await expect(page.getByTitle('重命名简历')).toContainText(before.data.title);
+  await page.reload();
+  await expect(page.getByTitle('重命名简历')).toContainText(before.data.title);
+});
+
 test('401 后保全 IndexedDB 信封并在同账户刷新后用原键恢复', async ({ page }) => {
   await page.goto('/');
   const nameInput = page.getByRole('textbox', { name: '姓名', exact: true });

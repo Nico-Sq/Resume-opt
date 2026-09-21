@@ -13,6 +13,9 @@ import {
   type ResumeListQuery,
   type ResumeMetadataRecord,
   type ResumeRepository,
+  type RenameResumeCommand,
+  type RenameResumeReceipt,
+  type RenameResumeResult,
   type SaveReceipt,
   type SaveResumeCommand,
   type SaveResumeResult,
@@ -104,6 +107,141 @@ class PostgresResumeRepository implements ResumeRepository {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
+  }
+
+  async rename(command: RenameResumeCommand): Promise<RenameResumeResult> {
+    const requestHash = sha256CanonicalJson({
+      resumeId: command.resumeId,
+      baseRevision: command.baseRevision,
+      title: command.title,
+    });
+    const claimed = await this.client.query(
+      `insert into idempotency_requests
+        (user_id, operation, key, request_hash, status, expires_at)
+       values ($1, 'resume.rename', $2, $3, 'processing', clock_timestamp() + interval '7 days')
+       on conflict do nothing
+       returning key`,
+      [this.userId, command.idempotencyKey, requestHash],
+    );
+    if (!claimed.rowCount) {
+      const existing = await this.client.query<{
+        request_hash: string;
+        status: string;
+        response_body: RenameResumeReceipt | null;
+      }>(
+        `select request_hash, status, response_body
+           from idempotency_requests
+          where user_id = $1 and operation = 'resume.rename' and key = $2
+          for update`,
+        [this.userId, command.idempotencyKey],
+      );
+      const row = existing.rows[0];
+      if (!row) throw new Error('幂等声明在冲突后不可见');
+      if (row.request_hash !== requestHash) throw new IdempotencyKeyReusedError();
+      if (row.status !== 'completed' || !row.response_body) {
+        throw new IdempotencyRequestInProgressError();
+      }
+      const active = await this.client.query(
+        `select 1 from resumes where id = $1 and user_id = $2 and deleted_at is null`,
+        [command.resumeId, this.userId],
+      );
+      if (!active.rowCount) throw new ResourceNotFoundError();
+      return { receipt: row.response_body, replayed: true };
+    }
+
+    const updated = await this.client.query<{
+      id: string;
+      title: string;
+      document: unknown;
+      revision: string;
+      schema_version: number;
+      template_id: string;
+      template_version: string;
+      locale: string;
+      stage: RenameResumeReceipt['resume']['stage'];
+      created_at: Date;
+      updated_at: Date;
+    }>(
+      `update resumes
+          set title = $1, revision = revision + 1, updated_at = clock_timestamp()
+        where id = $2 and user_id = $3 and deleted_at is null
+          and revision = $4::bigint
+      returning id, title, document, revision::text, schema_version,
+                template_id, template_version, document ->> 'locale' as locale,
+                document ->> 'stage' as stage, created_at, updated_at`,
+      [command.title, command.resumeId, this.userId, command.baseRevision],
+    );
+    const updatedRow = updated.rows[0];
+    if (!updatedRow) {
+      const current = await this.client.query<{ revision: string }>(
+        `select revision::text from resumes
+          where id = $1 and user_id = $2 and deleted_at is null`,
+        [command.resumeId, this.userId],
+      );
+      const currentRow = current.rows[0];
+      if (!currentRow) throw new ResourceNotFoundError();
+      throw new RevisionConflictError(currentRow.revision);
+    }
+    const template = await this.client.query<{ renderer_version: string }>(
+      `select renderer_version from templates where template_id = $1 and version = $2`,
+      [updatedRow.template_id, updatedRow.template_version],
+    );
+    const templateRow = template.rows[0];
+    if (!templateRow) throw new Error('简历模板版本不存在');
+
+    const versionId = randomUUID();
+    const contentHash = sha256CanonicalJson(updatedRow.document);
+    await this.client.query(
+      `insert into resume_versions
+        (id, resume_id, user_id, revision, title_snapshot, schema_version,
+         template_id, template_version, renderer_version, snapshot, content_hash, reason)
+       values ($1, $2, $3, $4::bigint, $5, $6, $7, $8, $9, $10::jsonb, $11, 'edit')`,
+      [
+        versionId,
+        command.resumeId,
+        this.userId,
+        updatedRow.revision,
+        updatedRow.title,
+        updatedRow.schema_version,
+        updatedRow.template_id,
+        updatedRow.template_version,
+        templateRow.renderer_version,
+        JSON.stringify(updatedRow.document),
+        contentHash,
+      ],
+    );
+    const receipt: RenameResumeReceipt = {
+      resume: {
+        id: updatedRow.id,
+        title: updatedRow.title,
+        locale: updatedRow.locale,
+        stage: updatedRow.stage,
+        revision: updatedRow.revision,
+        templateId: updatedRow.template_id,
+        templateVersion: updatedRow.template_version,
+        createdAt: updatedRow.created_at.toISOString(),
+        updatedAt: updatedRow.updated_at.toISOString(),
+      },
+      versionId,
+    };
+    await this.client.query(
+      `update idempotency_requests set status = 'completed', response_body = $1::jsonb
+        where user_id = $2 and operation = 'resume.rename' and key = $3`,
+      [JSON.stringify(receipt), this.userId, command.idempotencyKey],
+    );
+    await this.client.query(
+      `insert into audit_events
+        (id, actor_user_id, action, resource_type, resource_id, trace_id, result_code, metadata)
+       values ($1, $2, 'resume.rename', 'resume', $3, $4, 'RENAMED', $5::jsonb)`,
+      [
+        randomUUID(),
+        this.userId,
+        command.resumeId,
+        command.traceId,
+        JSON.stringify({ revision: updatedRow.revision, versionId }),
+      ],
+    );
+    return { receipt, replayed: false };
   }
 
   async create(command: CreateResumeCommand): Promise<CreateResumeResult> {

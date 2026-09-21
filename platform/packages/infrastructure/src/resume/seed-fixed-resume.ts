@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto';
-
 import { createInitialResumeDocument } from '@resume/domain/resume';
 import type { Pool } from 'pg';
+
+import { sha256CanonicalJson } from './canonical-json';
 
 export interface FixedResumeSeed {
   userId: string;
@@ -152,7 +152,7 @@ export async function seedFixedResume(
   const schema = seed.schema ?? 'public';
   if (!safeIdentifier.test(schema)) throw new Error('不安全的数据库 schema');
   const document = createPrototypeDocument();
-  const contentHash = createHash('sha256').update(JSON.stringify(document)).digest('hex');
+  const contentHash = sha256CanonicalJson(document);
   const client = await pool.connect();
 
   try {

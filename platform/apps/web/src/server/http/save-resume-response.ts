@@ -30,7 +30,7 @@ const SaveBodySchema = z.strictObject({
 
 type SaveExecutor = Pick<SaveResumeDocument, 'execute'>;
 
-function parseRevision(
+export function parseRevision(
   header: string | null,
 ): { success: true; revision: string } | { success: false; missing: boolean } {
   if (header === null) return { success: false, missing: true };

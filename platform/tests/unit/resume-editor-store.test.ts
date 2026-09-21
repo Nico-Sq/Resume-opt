@@ -171,6 +171,23 @@ describe('resume editor store', () => {
     expect(store.getState().isDirty).toBe(false);
   });
 
+  it('advances a clean shared revision without changing the document', () => {
+    const store = createResumeEditorStore({ document: createDocument(), revision: '1' });
+    const document = store.getState().document;
+
+    expect(store.getState().advanceRevision({ baseRevision: '1', revision: '2' })).toBe(true);
+    expect(store.getState()).toMatchObject({ ackRevision: '2', isDirty: false });
+    expect(store.getState().document).toBe(document);
+    expect(store.getState().advanceRevision({ baseRevision: '1', revision: '2' })).toBe(false);
+
+    store.getState().dispatch({
+      type: 'set-entry-field',
+      ...basicNameTarget(store.getState().document),
+      value: '未保存修改',
+    });
+    expect(store.getState().advanceRevision({ baseRevision: '2', revision: '3' })).toBe(false);
+  });
+
   it('hydrates a recovered working copy and resets session history', () => {
     const store = createResumeEditorStore({ document: createDocument(), revision: '1' });
     const recovered = createDocument();

@@ -2,6 +2,7 @@ import {
   CreateResume,
   GetResumeForEditor,
   ListResumes,
+  RenameResume,
   SaveResumeDocument,
 } from '@resume/application';
 import { parseServerRuntimeConfig } from '@resume/config/server';
@@ -113,6 +114,13 @@ export function getCreateResumeUseCase(requestHeaders: Headers) {
 
 export function getListResumesUseCase(requestHeaders: Headers) {
   return new ListResumes(
+    getRequestIdentityProvider(requestHeaders),
+    new PostgresUserTransactionManager(getApplicationPool()),
+  );
+}
+
+export function getRenameResumeUseCase(requestHeaders: Headers) {
+  return new RenameResume(
     getRequestIdentityProvider(requestHeaders),
     new PostgresUserTransactionManager(getApplicationPool()),
   );

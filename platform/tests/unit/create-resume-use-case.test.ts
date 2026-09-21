@@ -38,6 +38,7 @@ function harness() {
           create,
           findActiveById: () => Promise.resolve(null),
           listActive: () => Promise.resolve([]),
+          rename: () => Promise.reject(new Error('本测试不调用重命名')),
           saveDocument: () => Promise.reject(new Error('本测试不调用保存')),
         },
       });

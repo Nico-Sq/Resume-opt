@@ -44,7 +44,10 @@ import {
 } from './persistence';
 import {
   HttpSaveTransport,
+  HttpRenameTransport,
+  SaveTransportError,
   SaveCoordinator,
+  type RenameTransport,
   type SaveCoordinatorStatus,
   type SaveTransport,
 } from './saving';
@@ -72,6 +75,7 @@ export interface EditorWorkspaceProps {
   store?: ResumeEditorStore;
   localDraft?: EditorLocalDraftContext;
   saveTransport?: SaveTransport;
+  renameTransport?: RenameTransport;
   conflictSnapshotTransport?: ConflictSnapshotTransport;
 }
 
@@ -252,6 +256,7 @@ export function EditorWorkspace({
   store: providedStore,
   localDraft,
   saveTransport,
+  renameTransport,
   conflictSnapshotTransport,
 }: EditorWorkspaceProps) {
   const [store] = useState(() => {
@@ -281,6 +286,8 @@ export function EditorWorkspace({
         : { phase: 'synced', revision: store.getState().ackRevision }
       : null,
   );
+  const [resumeTitle, setResumeTitle] = useState(initialResume.title);
+  const [resolvedRenameTransport] = useState(() => renameTransport ?? new HttpRenameTransport());
   const localDraftControllerRef = useRef<LocalDraftController | null>(null);
   const saveCoordinatorRef = useRef<SaveCoordinator | null>(null);
   const accountBarrierRef = useRef<AccountExitBarrier | null>(null);
@@ -545,6 +552,32 @@ export function EditorWorkspace({
 
   const flushSave = () => saveCoordinatorRef.current?.flush() ?? Promise.resolve();
   const retrySave = () => saveCoordinatorRef.current?.retryNow() ?? Promise.resolve();
+  const renameCurrentResume = async (title: string, idempotencyKey: string) => {
+    await flushSave();
+    const state = store.getState();
+    if (state.isDirty || localDraftControllerRef.current?.getPendingEnvelope()) {
+      throw new SaveTransportError('fatal', '请先完成正文保存，再重命名简历');
+    }
+    const baseRevision = state.ackRevision;
+    const receipt = await resolvedRenameTransport.rename({
+      resumeId: initialResume.id,
+      title,
+      baseRevision,
+      idempotencyKey,
+    });
+    const advanced = localDraftControllerRef.current
+      ? await localDraftControllerRef.current.advanceRevision(baseRevision, receipt.resume.revision)
+      : state.advanceRevision({ baseRevision, revision: receipt.resume.revision });
+    if (!advanced) {
+      throw new SaveTransportError(
+        'conflict',
+        '标题已保存，但本地正文版本已变化，请刷新后继续编辑',
+        { currentRevision: receipt.resume.revision },
+      );
+    }
+    setResumeTitle(receipt.resume.title);
+    setCloudSaveStatus({ phase: 'synced', revision: receipt.resume.revision });
+  };
   const adoptRemote = async (
     remote: Awaited<ReturnType<ConflictSnapshotTransport['loadCurrent']>>,
   ) => {
@@ -590,12 +623,13 @@ export function EditorWorkspace({
           setConflictLoadAttempt((attempt) => attempt + 1);
         }}
         onRetrySave={retrySave}
+        onRenameResume={renameCurrentResume}
         onShowDiscardConfirmation={() => {
           setAccountExit((state) =>
             state.status === 'decision' ? { ...state, confirmDiscard: true } : state,
           );
         }}
-        resume={initialResume}
+        resume={{ ...initialResume, title: resumeTitle }}
       />
     </ResumeEditorStoreProvider>
   );
@@ -621,6 +655,7 @@ function EditorWorkspaceContent({
   onRebaseLocal,
   onRetryConflictLoad,
   onRetrySave,
+  onRenameResume,
   onShowDiscardConfirmation,
 }: {
   resume: EditorResume;
@@ -646,6 +681,7 @@ function EditorWorkspaceContent({
   ) => Promise<void>;
   onRetryConflictLoad: () => void;
   onRetrySave: () => Promise<void>;
+  onRenameResume: (title: string, idempotencyKey: string) => Promise<void>;
   onShowDiscardConfirmation: () => void;
 }) {
   const resumeDocument = useResumeEditorStore((state) => state.document);
@@ -666,6 +702,14 @@ function EditorWorkspaceContent({
   const [announcement, setAnnouncement] = useState('');
   const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
   const [customTitle, setCustomTitle] = useState('');
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameTitle, setRenameTitle] = useState(resume.title);
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renameError, setRenameError] = useState('');
+  const renameAttemptRef = useRef<{ title: string; idempotencyKey: string } | null>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  const renameDialogRef = useRef<HTMLElement>(null);
+  const titleButtonRef = useRef<HTMLButtonElement>(null);
   const actionRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const openLeftPanel = () => {
@@ -675,6 +719,82 @@ function EditorWorkspaceContent({
   const openRightPanel = () => {
     setRightOpen(true);
     if (compactLayout) setLeftOpen(false);
+  };
+
+  useEffect(() => {
+    if (!renameOpen) return;
+    renameInputRef.current?.focus();
+    renameInputRef.current?.select();
+    const handleDialogKeys = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape' && !renameBusy) {
+        setRenameOpen(false);
+        titleButtonRef.current?.focus();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const controls = renameDialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled)',
+      );
+      const first = controls?.[0];
+      const last = controls?.[controls.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', handleDialogKeys);
+    return () => {
+      window.removeEventListener('keydown', handleDialogKeys);
+    };
+  }, [renameBusy, renameOpen]);
+
+  const closeRename = () => {
+    if (renameBusy) return;
+    setRenameOpen(false);
+    setRenameError('');
+    renameAttemptRef.current = null;
+    titleButtonRef.current?.focus();
+  };
+
+  const submitRename = async () => {
+    const title = renameTitle.trim();
+    const length = Array.from(title).length;
+    if (length < 1 || length > 200) {
+      setRenameError('简历名称须为 1—200 个字符');
+      return;
+    }
+    const attempt =
+      renameAttemptRef.current?.title === title
+        ? renameAttemptRef.current
+        : { title, idempotencyKey: crypto.randomUUID() };
+    renameAttemptRef.current = attempt;
+    setRenameBusy(true);
+    setRenameError('');
+    try {
+      await onRenameResume(attempt.title, attempt.idempotencyKey);
+      setRenameOpen(false);
+      renameAttemptRef.current = null;
+      setAnnouncement(`简历已重命名为${attempt.title}`);
+      titleButtonRef.current?.focus();
+    } catch (error) {
+      if (error instanceof SaveTransportError) {
+        setRenameError(
+          error.kind === 'conflict'
+            ? '服务器版本已更新，请刷新页面后重试'
+            : error.kind === 'auth'
+              ? '登录状态已失效，请重新登录后重试'
+              : error.message,
+        );
+      } else {
+        setRenameError('暂时无法重命名，请稍后重试');
+      }
+    } finally {
+      setRenameBusy(false);
+    }
   };
 
   const selectedSection = resumeDocument.sectionsById[selectedSectionId];
@@ -892,7 +1012,18 @@ function EditorWorkspaceContent({
             <span>返回工作台</span>
           </button>
           <span aria-hidden="true" className={styles.topbarDivider} />
-          <button className={styles.titleButton} title="重命名简历" type="button">
+          <button
+            className={styles.titleButton}
+            onClick={() => {
+              setRenameTitle(resume.title);
+              setRenameError('');
+              renameAttemptRef.current = null;
+              setRenameOpen(true);
+            }}
+            ref={titleButtonRef}
+            title="重命名简历"
+            type="button"
+          >
             <strong>{resume.title}</strong>
             <EditorIcon name="pencil" size={17} />
           </button>
@@ -1543,6 +1674,71 @@ function EditorWorkspaceContent({
                 </button>
               </footer>
             ) : null}
+          </section>
+        </div>
+      ) : null}
+      {renameOpen ? (
+        <div className={styles.dialogBackdrop}>
+          <section
+            aria-labelledby="rename-resume-title"
+            aria-modal="true"
+            className={classNames(styles.conflictDialog, styles.renameDialog)}
+            ref={renameDialogRef}
+            role="dialog"
+          >
+            <header className={styles.conflictHeader}>
+              <div>
+                <span className={styles.eyebrow}>简历名称</span>
+                <h2 id="rename-resume-title">重命名简历</h2>
+              </div>
+              <button
+                aria-label="关闭重命名"
+                disabled={renameBusy}
+                onClick={closeRename}
+                type="button"
+              >
+                ×
+              </button>
+            </header>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submitRename();
+              }}
+            >
+              <label className={styles.renameField}>
+                <span>简历名称</span>
+                <input
+                  aria-describedby={renameError ? 'rename-resume-error' : undefined}
+                  disabled={renameBusy}
+                  maxLength={400}
+                  onChange={(event) => {
+                    setRenameTitle(event.currentTarget.value);
+                    setRenameError('');
+                    renameAttemptRef.current = null;
+                  }}
+                  ref={renameInputRef}
+                  value={renameTitle}
+                />
+              </label>
+              {renameError ? (
+                <p className={styles.renameError} id="rename-resume-error" role="alert">
+                  {renameError}
+                </p>
+              ) : null}
+              <footer className={styles.conflictActions}>
+                <button disabled={renameBusy} onClick={closeRename} type="button">
+                  取消
+                </button>
+                <button
+                  className={styles.conflictPrimaryAction}
+                  disabled={renameBusy}
+                  type="submit"
+                >
+                  {renameBusy ? '正在保存' : '保存名称'}
+                </button>
+              </footer>
+            </form>
           </section>
         </div>
       ) : null}

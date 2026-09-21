@@ -38,6 +38,7 @@ describe('SaveResumeDocument', () => {
             create: () => Promise.reject(new Error('本测试不调用创建')),
             findActiveById: () => Promise.resolve(null),
             listActive: () => Promise.resolve([]),
+            rename: () => Promise.reject(new Error('本测试不调用重命名')),
             saveDocument,
           },
         });

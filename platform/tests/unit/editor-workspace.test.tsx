@@ -20,7 +20,12 @@ import {
   type LocalDraftScope,
   type PendingSaveEnvelope,
 } from '../../apps/web/src/client/editor/persistence';
-import { SaveTransportError, type SaveTransport } from '../../apps/web/src/client/editor/saving';
+import {
+  SaveTransportError,
+  type RenameResumeRequest,
+  type RenameTransport,
+  type SaveTransport,
+} from '../../apps/web/src/client/editor/saving';
 import { createResumeEditorStore } from '../../apps/web/src/client/editor/store';
 
 class MemoryLocalDraftRepository implements LocalDraftRepository {
@@ -156,6 +161,23 @@ function createFixture() {
   };
 }
 
+function renamedReceipt(input: RenameResumeRequest) {
+  return {
+    resume: {
+      id: input.resumeId,
+      title: input.title,
+      locale: 'zh-CN',
+      stage: 'employed' as const,
+      revision: String(Number(input.baseRevision) + 1),
+      templateId: 'standard',
+      templateVersion: '1.0.0',
+      createdAt: '2026-09-18T08:00:00.000Z',
+      updatedAt: '2026-09-18T08:00:01.000Z',
+    },
+    versionId: randomUUID(),
+  };
+}
+
 afterEach(() => {
   cleanup();
   Reflect.deleteProperty(navigator, 'locks');
@@ -163,6 +185,62 @@ afterEach(() => {
 });
 
 describe('editor workspace module management', () => {
+  it('renames a clean resume and advances the shared revision without touching its body', async () => {
+    const user = userEvent.setup();
+    const { resume, store } = createFixture();
+    const body = store.getState().document;
+    const rename = vi.fn<RenameTransport['rename']>((input) =>
+      Promise.resolve(renamedReceipt(input)),
+    );
+    render(<EditorWorkspace initialResume={resume} renameTransport={{ rename }} store={store} />);
+
+    await user.click(screen.getByTitle('重命名简历'));
+    const dialog = screen.getByRole('dialog', { name: '重命名简历' });
+    const input = within(dialog).getByRole('textbox', { name: '简历名称' });
+    await user.clear(input);
+    await user.type(input, '后端工程师简历🙂');
+    await user.click(within(dialog).getByRole('button', { name: '保存名称' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '重命名简历' })).toBeNull();
+    });
+    expect(rename).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resumeId: resume.id,
+        title: '后端工程师简历🙂',
+        baseRevision: '1',
+      }),
+    );
+    expect(screen.getByTitle('重命名简历').textContent).toContain('后端工程师简历🙂');
+    expect(store.getState()).toMatchObject({ ackRevision: '2', isDirty: false });
+    expect(store.getState().document).toBe(body);
+  });
+
+  it('reuses the same rename idempotency key after a lost response', async () => {
+    const user = userEvent.setup();
+    const { resume, store } = createFixture();
+    const rename = vi
+      .fn<RenameTransport['rename']>()
+      .mockRejectedValueOnce(new SaveTransportError('network', '连接已中断'))
+      .mockImplementationOnce((input) => Promise.resolve(renamedReceipt(input)));
+    render(<EditorWorkspace initialResume={resume} renameTransport={{ rename }} store={store} />);
+
+    await user.click(screen.getByTitle('重命名简历'));
+    const dialog = screen.getByRole('dialog', { name: '重命名简历' });
+    const input = within(dialog).getByRole('textbox', { name: '简历名称' });
+    await user.clear(input);
+    await user.type(input, '丢失回执后的名称');
+    await user.click(within(dialog).getByRole('button', { name: '保存名称' }));
+    await within(dialog).findByRole('alert');
+    await user.click(within(dialog).getByRole('button', { name: '保存名称' }));
+
+    await waitFor(() => {
+      expect(rename).toHaveBeenCalledTimes(2);
+    });
+    expect(rename.mock.calls[0]?.[0].idempotencyKey).toBe(rename.mock.calls[1]?.[0].idempotencyKey);
+    expect(store.getState().ackRevision).toBe('2');
+  });
+
   it('moves modules from the keyboard, announces the result and preserves focus', async () => {
     const user = userEvent.setup();
     const { resume, store } = createFixture();

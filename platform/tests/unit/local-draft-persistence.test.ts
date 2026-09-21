@@ -329,6 +329,36 @@ class FailingRepository implements LocalDraftRepository {
 }
 
 describe('LocalDraftController', () => {
+  it('persists a clean metadata revision without changing either document snapshot', async () => {
+    const name = databaseName();
+    const draftScope = scope();
+    const remote = createInitialResumeDocument();
+    const repository = new DexieLocalDraftRepository(name, () => fixedNow);
+    const store = createResumeEditorStore({ document: remote, revision: '1' });
+    const controller = new LocalDraftController({
+      repository,
+      scope: draftScope,
+      store,
+      remoteDocument: remote,
+      remoteRevision: '1',
+      debounceMs: 0,
+      now: () => fixedNow,
+      onStatus: () => undefined,
+    });
+    await controller.start();
+
+    await expect(controller.advanceRevision('1', '2')).resolves.toBe(true);
+    expect(store.getState()).toMatchObject({ ackRevision: '2', isDirty: false });
+    await expect(repository.get(draftScope)).resolves.toMatchObject({
+      baseRevision: '2',
+      baseSnapshot: remote,
+      workingSnapshot: remote,
+      pendingEnvelope: null,
+    });
+    await expect(controller.advanceRevision('1', '2')).resolves.toBe(false);
+    await controller.dispose();
+  });
+
   it('backs up store edits and restores them into a fresh store after refresh', async () => {
     const name = databaseName();
     const draftScope = scope();

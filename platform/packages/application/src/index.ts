@@ -18,6 +18,12 @@ export {
   type ResumePageDto,
 } from './resume/list-resumes';
 export {
+  InvalidRenameResumeRequestError,
+  RenameResume,
+  type RenameResumeInput,
+  type RenameResumeOutput,
+} from './resume/rename-resume';
+export {
   IdempotencyKeyReusedError,
   IdempotencyRequestInProgressError,
   InvalidSaveRequestError,
@@ -40,6 +46,9 @@ export type {
   ResumeListQuery,
   ResumeListReader,
   ResumeMetadataRecord,
+  RenameResumeCommand,
+  RenameResumeReceipt,
+  RenameResumeResult,
   ResumeReader,
   ResumeRepository,
   ResumeWriter,
