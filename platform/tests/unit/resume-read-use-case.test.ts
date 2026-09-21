@@ -39,6 +39,7 @@ function transactionsFor(result: PersistedResume | null, observedUsers: string[]
         resumes: {
           create: () => Promise.reject(new Error('本测试不调用创建')),
           findActiveById: () => Promise.resolve(result),
+          listActive: () => Promise.resolve([]),
           saveDocument: () => Promise.reject(new Error('本测试不调用保存')),
         },
       })) as T;

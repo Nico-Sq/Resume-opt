@@ -11,6 +11,13 @@ export {
   type CreateResumeOutput,
 } from './resume/create-resume';
 export {
+  InvalidResumeCursorError,
+  InvalidResumeListRequestError,
+  ListResumes,
+  type ResumeMetaDto,
+  type ResumePageDto,
+} from './resume/list-resumes';
+export {
   IdempotencyKeyReusedError,
   IdempotencyRequestInProgressError,
   InvalidSaveRequestError,
@@ -30,6 +37,9 @@ export type {
   CurrentIdentity,
   IdentityProvider,
   PersistedResume,
+  ResumeListQuery,
+  ResumeListReader,
+  ResumeMetadataRecord,
   ResumeReader,
   ResumeRepository,
   ResumeWriter,

@@ -44,6 +44,27 @@ export interface ResumeReader {
   findActiveById(resumeId: string): Promise<PersistedResume | null>;
 }
 
+export interface ResumeMetadataRecord {
+  id: string;
+  title: string;
+  locale: string;
+  stage: ResumeDocumentV1['stage'];
+  revision: bigint;
+  templateId: string;
+  templateVersion: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ResumeListQuery {
+  limit: number;
+  after?: { updatedAt: Date; id: string };
+}
+
+export interface ResumeListReader {
+  listActive(query: ResumeListQuery): Promise<ResumeMetadataRecord[]>;
+}
+
 export interface SaveResumeCommand {
   resumeId: string;
   idempotencyKey: string;
@@ -96,7 +117,7 @@ export interface ResumeWriter {
   saveDocument(command: SaveResumeCommand): Promise<SaveResumeResult>;
 }
 
-export interface ResumeRepository extends ResumeReader, ResumeWriter {}
+export interface ResumeRepository extends ResumeReader, ResumeWriter, ResumeListReader {}
 
 export interface UserTransaction {
   resumes: ResumeRepository;

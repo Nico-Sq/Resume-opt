@@ -10,6 +10,8 @@ import {
   type CreateResumeReceipt,
   type CreateResumeResult,
   type PersistedResume,
+  type ResumeListQuery,
+  type ResumeMetadataRecord,
   type ResumeRepository,
   type SaveReceipt,
   type SaveResumeCommand,
@@ -65,6 +67,43 @@ class PostgresResumeRepository implements ResumeRepository {
     );
     const row = result.rows[0];
     return row ? toPersistedResume(row) : null;
+  }
+
+  async listActive(query: ResumeListQuery): Promise<ResumeMetadataRecord[]> {
+    const parameters: unknown[] = [this.userId];
+    const after = query.after ? `and (updated_at, id) < ($2::timestamptz, $3::uuid)` : '';
+    if (query.after) parameters.push(query.after.updatedAt, query.after.id);
+    parameters.push(query.limit);
+    const result = await this.client.query<{
+      id: string;
+      title: string;
+      locale: string;
+      stage: ResumeMetadataRecord['stage'];
+      revision: string;
+      template_id: string;
+      template_version: string;
+      created_at: Date;
+      updated_at: Date;
+    }>(
+      `select id, title, document ->> 'locale' as locale, document ->> 'stage' as stage,
+              revision::text, template_id, template_version, created_at, updated_at
+         from resumes
+        where user_id = $1 and deleted_at is null ${after}
+        order by updated_at desc, id desc
+        limit $${String(parameters.length)}`,
+      parameters,
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      locale: row.locale,
+      stage: row.stage,
+      revision: BigInt(row.revision),
+      templateId: row.template_id,
+      templateVersion: row.template_version,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
   }
 
   async create(command: CreateResumeCommand): Promise<CreateResumeResult> {

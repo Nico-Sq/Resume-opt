@@ -57,12 +57,14 @@ describe('initial database migration', () => {
       '0002_auth_identity.up.sql',
       '0003_auth_rate_limit.up.sql',
       '0004_active_business_rls.up.sql',
+      '0005_resume_list_index.up.sql',
     ]);
     expect(secondRun.alreadyApplied).toEqual([
       '0001_initial.up.sql',
       '0002_auth_identity.up.sql',
       '0003_auth_rate_limit.up.sql',
       '0004_active_business_rls.up.sql',
+      '0005_resume_list_index.up.sql',
     ]);
   });
 

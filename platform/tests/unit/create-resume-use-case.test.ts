@@ -37,6 +37,7 @@ function harness() {
         resumes: {
           create,
           findActiveById: () => Promise.resolve(null),
+          listActive: () => Promise.resolve([]),
           saveDocument: () => Promise.reject(new Error('本测试不调用保存')),
         },
       });

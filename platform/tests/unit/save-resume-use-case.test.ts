@@ -37,6 +37,7 @@ describe('SaveResumeDocument', () => {
           resumes: {
             create: () => Promise.reject(new Error('本测试不调用创建')),
             findActiveById: () => Promise.resolve(null),
+            listActive: () => Promise.resolve([]),
             saveDocument,
           },
         });

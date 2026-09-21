@@ -1,0 +1,1 @@
+drop index resumes_user_updated_id_idx;

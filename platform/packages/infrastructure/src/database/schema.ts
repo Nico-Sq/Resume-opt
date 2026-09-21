@@ -158,6 +158,9 @@ export const resumes = pgTable(
     index('resumes_user_updated_idx')
       .on(table.userId, table.updatedAt)
       .where(sql`${table.deletedAt} is null`),
+    index('resumes_user_updated_id_idx')
+      .on(table.userId, table.updatedAt.desc(), table.id.desc())
+      .where(sql`${table.deletedAt} is null`),
     check('resumes_revision_check', sql`${table.revision} >= 0`),
     check('resumes_schema_version_check', sql`${table.schemaVersion} = 1`),
   ],
