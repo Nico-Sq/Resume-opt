@@ -262,6 +262,50 @@ describe('SaveCoordinator', () => {
     coordinator.dispose();
   });
 
+  it('keeps the frozen envelope on 401 and surfaces a later revision change as 412', async () => {
+    const document = createInitialResumeDocument();
+    const sectionId = editableSectionId(document);
+    const store = createResumeEditorStore({ document, revision: '1' });
+    const persistence = new MemorySavePersistence(store);
+    const transport = new ControlledTransport();
+    const statuses: SaveCoordinatorStatus[] = [];
+    const coordinator = new SaveCoordinator({
+      resumeId: randomUUID(),
+      store,
+      persistence,
+      transport,
+      debounceMs: 0,
+      onStatus: (status) => statuses.push(status),
+    });
+    coordinator.start();
+    store.getState().dispatch({ type: 'set-section-title', sectionId, title: '会话过期前' });
+    await vi.advanceTimersByTimeAsync(0);
+    const expired = transport.calls[0];
+    if (!expired) throw new Error('缺少过期会话保存请求');
+    expired.result.reject(new SaveTransportError('auth', '登录状态已失效', { status: 401 }));
+    await settle();
+
+    expect(statuses.at(-1)).toMatchObject({ phase: 'auth-paused' });
+    expect(persistence.pending).toEqual(expired.envelope);
+    store.getState().dispatch({ type: 'set-section-title', sectionId, title: '失效后的新输入' });
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(transport.calls).toHaveLength(1);
+
+    const resumed = coordinator.retryNow();
+    await settle();
+    const replayed = transport.calls[1];
+    if (!replayed) throw new Error('缺少同账户恢复重放请求');
+    expect(replayed.envelope).toEqual(expired.envelope);
+    replayed.result.reject(
+      new SaveTransportError('conflict', '版本冲突', { status: 412, currentRevision: '2' }),
+    );
+    await resumed;
+    expect(statuses.at(-1)).toMatchObject({ phase: 'conflict', currentRevision: '2' });
+    expect(store.getState().document.sectionsById[sectionId]?.title).toBe('失效后的新输入');
+    expect(persistence.pending).toEqual(expired.envelope);
+    coordinator.dispose();
+  });
+
   it('waits before an automatic retry and does not let flush create a parallel request', async () => {
     const document = createInitialResumeDocument();
     const sectionId = editableSectionId(document);

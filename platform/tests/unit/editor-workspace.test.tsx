@@ -477,6 +477,43 @@ describe('editor workspace module management', () => {
     expect(screen.queryByRole('alert', { name: '保存状态通知' })).toBeNull();
   });
 
+  it('freezes uploads on 401 and offers same-account login plus rescue when IndexedDB failed', async () => {
+    const { resume, store } = createFixture();
+    const repository = new MemoryLocalDraftRepository();
+    const scope = { userId: randomUUID(), resumeId: resume.id, tabId: randomUUID() };
+    const save = vi
+      .fn<SaveTransport['save']>()
+      .mockRejectedValue(new SaveTransportError('auth', '登录状态已失效', { status: 401 }));
+    render(
+      <EditorWorkspace
+        initialResume={resume}
+        localDraft={{
+          repository,
+          scope,
+          initialRecord: null,
+          initialError: new LocalDraftUnavailableError('unavailable'),
+        }}
+        saveTransport={{ save }}
+        store={store}
+      />,
+    );
+    const title = screen.getByRole('textbox', { name: '模块标题' });
+    fireEvent.change(title, { target: { value: '会话过期时的本地修改' } });
+    fireEvent.blur(title);
+
+    const notice = await screen.findByRole('alert', { name: '登录状态通知' });
+    expect(within(notice).getByText(/已停止上传/u)).toBeInstanceOf(HTMLElement);
+    expect(within(notice).getByRole('button', { name: '导出救援副本' })).toBeInstanceOf(
+      HTMLElement,
+    );
+    expect(within(notice).getByRole('link', { name: '重新登录' }).getAttribute('href')).toBe(
+      `/login?returnTo=${encodeURIComponent(`/resumes/${resume.id}/edit`)}`,
+    );
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(store.getState().isDirty).toBe(true);
+    expect(screen.queryByText('已保存', { exact: true })).toBeNull();
+  });
+
   it('shows a three-way conflict overlay and explicitly rebases the full local snapshot', async () => {
     const user = userEvent.setup();
     const { resume, store } = createFixture();

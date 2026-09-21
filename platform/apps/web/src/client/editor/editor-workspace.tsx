@@ -1285,6 +1285,30 @@ function EditorWorkspaceContent({
           </button>
         ) : null}
       </nav>
+      {cloudSaveStatus?.phase === 'auth-paused' ? (
+        <section
+          aria-label="登录状态通知"
+          className={styles.saveNotice}
+          data-phase="auth-paused"
+          role="alert"
+        >
+          <span aria-hidden="true" className={styles.saveNoticeIcon}>
+            !
+          </span>
+          <div>
+            <strong>登录状态已失效</strong>
+            <p>最新修改已停止上传。重新登录同一账户后返回本页即可继续保存。</p>
+            <div>
+              <a href={`/login?returnTo=${encodeURIComponent(`/resumes/${resume.id}/edit`)}`}>
+                重新登录
+              </a>
+              <button onClick={onExportRescue} type="button">
+                导出救援副本
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
       {(cloudSaveStatus?.phase === 'failed' || cloudSaveStatus?.phase === 'retry-wait') &&
       dismissedSavePhase !== cloudSaveStatus.phase ? (
         <section

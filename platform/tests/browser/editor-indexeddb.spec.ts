@@ -22,6 +22,8 @@ interface DraftSummary {
   localSeq: number;
   ackedSeq: number;
   pending: boolean;
+  pendingBaseRevision: string | null;
+  pendingKey: string | null;
 }
 
 function percentile95(samples: number[]): number {
@@ -55,7 +57,7 @@ async function readDraft(page: Page): Promise<DraftSummary | null> {
         | {
             localSeq: number;
             ackedSeq: number;
-            pendingEnvelope: unknown;
+            pendingEnvelope: { baseRevision: string; idempotencyKey: string } | null;
             workingSnapshot: {
               sectionsById: Record<
                 string,
@@ -80,6 +82,8 @@ async function readDraft(page: Page): Promise<DraftSummary | null> {
         localSeq: record.localSeq,
         ackedSeq: record.ackedSeq,
         pending: record.pendingEnvelope !== null,
+        pendingBaseRevision: record.pendingEnvelope?.baseRevision ?? null,
+        pendingKey: record.pendingEnvelope?.idempotencyKey ?? null,
       };
     } finally {
       database.close();
@@ -170,6 +174,64 @@ test('动态编辑路由支持两份本人简历、刷新和后退且私有响�
   const missingId = randomUUID();
   await page.goto(`/resumes/${missingId}/edit`);
   await expect(page.getByText('简历不存在或无权访问', { exact: true })).toBeVisible();
+});
+
+test('401 后保全 IndexedDB 信封并在同账户刷新后用原键恢复', async ({ page }) => {
+  await page.goto('/');
+  const nameInput = page.getByRole('textbox', { name: '姓名', exact: true });
+  await expect(nameInput).toBeVisible();
+  const originalName = await nameInput.inputValue();
+  const calls: Array<{ body: string | null; idempotencyKey: string; revision: string }> = [];
+  const savePattern = `**/api/v1/resumes/${FIXED_RESUME_ID}/document`;
+  await page.route(savePattern, async (route) => {
+    const request = route.request();
+    calls.push({
+      body: request.postData(),
+      idempotencyKey: request.headers()['idempotency-key'] ?? '',
+      revision: request.headers()['if-match'] ?? '',
+    });
+    if (calls.length > 1) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify({
+        code: 'AUTH_REQUIRED',
+        message: '登录状态已失效',
+        retryable: false,
+        traceId: randomUUID(),
+      }),
+      contentType: 'application/json',
+      headers: { 'Cache-Control': 'private, no-store' },
+      status: 401,
+    });
+  });
+
+  const recoveryName = `会话恢复-${String(Date.now())}`;
+  await nameInput.fill(recoveryName);
+  await nameInput.press('Tab');
+  await expect(page.getByRole('alert', { name: '登录状态通知' })).toBeVisible();
+  await expect
+    .poll(async () => readDraft(page))
+    .toMatchObject({ name: recoveryName, pending: true });
+  const pending = await readDraft(page);
+  expect(pending?.localSeq).toBeGreaterThan(pending?.ackedSeq ?? Number.MAX_SAFE_INTEGER);
+  expect(pending?.pendingKey).toBe(calls[0]?.idempotencyKey);
+  expect(pending?.pendingBaseRevision).toBe(calls[0]?.revision.replaceAll('"', ''));
+
+  await page.reload();
+  await expect(page.getByRole('textbox', { name: '姓名', exact: true })).toHaveValue(recoveryName);
+  await expect(page.getByText('已保存', { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect.poll(async () => (await readDraft(page))?.pending).toBe(false);
+  expect(calls).toHaveLength(2);
+  expect(calls[1]).toEqual(calls[0]);
+
+  await page.unroute(savePattern);
+  await updateNameAndMeasure(
+    page.getByRole('textbox', { name: '姓名', exact: true }),
+    originalName,
+  );
+  await expect(page.getByText('已保存', { exact: true })).toBeVisible({ timeout: 15_000 });
 });
 
 test('滚动只归属编辑器内部且普通长页面可以滚动', async ({ page }) => {

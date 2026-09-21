@@ -1447,16 +1447,20 @@ button:focus-visible {
   display: flex;
   gap: 10px;
 }
-.saveNotice button {
+.saveNotice button,
+.saveNotice a {
+  display: inline-grid;
   min-height: 38px;
   border: 1px solid #4a4a4a;
   border-radius: 4px;
   background: #171717;
   color: #f5f5f5;
   cursor: pointer;
+  place-items: center;
   padding: 0 18px;
   font: inherit;
   font-size: 13px;
+  text-decoration: none;
 }
 .saveNotice .saveNoticeClose {
   width: 30px;
