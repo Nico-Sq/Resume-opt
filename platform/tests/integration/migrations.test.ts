@@ -58,6 +58,7 @@ describe('initial database migration', () => {
       '0003_auth_rate_limit.up.sql',
       '0004_active_business_rls.up.sql',
       '0005_resume_list_index.up.sql',
+      '0006_resume_lifecycle.up.sql',
     ]);
     expect(secondRun.alreadyApplied).toEqual([
       '0001_initial.up.sql',
@@ -65,6 +66,7 @@ describe('initial database migration', () => {
       '0003_auth_rate_limit.up.sql',
       '0004_active_business_rls.up.sql',
       '0005_resume_list_index.up.sql',
+      '0006_resume_lifecycle.up.sql',
     ]);
   });
 
@@ -80,6 +82,7 @@ describe('initial database migration', () => {
       'auth_sessions',
       'auth_users',
       'auth_verifications',
+      'deletion_events',
       'idempotency_requests',
       'resume_versions',
       'resumes',
@@ -222,9 +225,21 @@ describe('initial database migration', () => {
       await expect(appClient.query('select token from auth_sessions')).rejects.toThrow();
       await appClient.query('rollback');
 
+      await appClient.query('begin');
+      await appClient.query(`set local search_path to "${schema}", public`);
+      await expect(appClient.query('select * from deletion_events')).rejects.toThrow();
+      await appClient.query('rollback');
+
       await authClient.query('begin');
       await authClient.query(`set local search_path to "${schema}", public`);
       await expect(authClient.query('select document from resumes')).rejects.toThrow();
+      await authClient.query('rollback');
+
+      await authClient.query('begin');
+      await authClient.query(`set local search_path to "${schema}", public`);
+      await expect(
+        authClient.query('select * from list_deleted_resumes(1, null, null)'),
+      ).rejects.toThrow();
       await authClient.query('rollback');
     } finally {
       appClient.release();

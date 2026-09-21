@@ -147,6 +147,7 @@ export const resumes = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    restoreUntil: timestamp('restore_until', { withTimezone: true }),
   },
   (table) => [
     unique('resumes_id_user_unique').on(table.id, table.userId),
@@ -163,6 +164,10 @@ export const resumes = pgTable(
       .where(sql`${table.deletedAt} is null`),
     check('resumes_revision_check', sql`${table.revision} >= 0`),
     check('resumes_schema_version_check', sql`${table.schemaVersion} = 1`),
+    check(
+      'resumes_deletion_window_check',
+      sql`(${table.deletedAt} is null and ${table.restoreUntil} is null) or (${table.deletedAt} is not null and ${table.restoreUntil} > ${table.deletedAt})`,
+    ),
   ],
 );
 
@@ -205,8 +210,34 @@ export const resumeVersions = pgTable(
     check('resume_versions_revision_check', sql`${table.revision} >= 1`),
     check(
       'resume_versions_reason_check',
-      sql`${table.reason} in ('autosave', 'edit', 'restore', 'initial')`,
+      sql`${table.reason} in ('autosave', 'edit', 'delete', 'restore', 'initial')`,
     ),
+  ],
+);
+
+export const deletionEvents = pgTable(
+  'deletion_events',
+  {
+    id: uuid('id').primaryKey(),
+    resumeId: uuid('resume_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    eventType: text('event_type').notNull(),
+    revision: bigint('revision', { mode: 'bigint' }).notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    restoreUntil: timestamp('restore_until', { withTimezone: true }),
+    policyVersion: integer('policy_version').notNull().default(1),
+    traceId: uuid('trace_id').notNull(),
+  },
+  (table) => [
+    unique('deletion_events_resume_revision_unique').on(table.resumeId, table.revision),
+    index('deletion_events_user_occurred_idx').on(
+      table.userId,
+      table.occurredAt.desc(),
+      table.id.desc(),
+    ),
+    check('deletion_events_type_check', sql`${table.eventType} in ('soft_delete', 'restore')`),
+    check('deletion_events_revision_check', sql`${table.revision} >= 1`),
+    check('deletion_events_policy_version_check', sql`${table.policyVersion} = 1`),
   ],
 );
 

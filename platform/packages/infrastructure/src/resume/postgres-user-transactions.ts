@@ -4,6 +4,7 @@ import {
   IdempotencyKeyReusedError,
   IdempotencyRequestInProgressError,
   ResourceNotFoundError,
+  RestoreWindowExpiredError,
   RevisionConflictError,
   TemplateUnavailableError,
   type CopyResumeCommand,
@@ -11,6 +12,10 @@ import {
   type CreateResumeCommand,
   type CreateResumeReceipt,
   type CreateResumeResult,
+  type DeleteResumeCommand,
+  type DeleteResumeReceipt,
+  type DeleteResumeResult,
+  type DeletedResumeMetadataRecord,
   type PersistedResume,
   type ResumeListQuery,
   type ResumeMetadataRecord,
@@ -23,6 +28,8 @@ import {
   type SaveResumeResult,
   type UserTransaction,
   type UserTransactionManager,
+  type UndeleteResumeCommand,
+  type UndeleteResumeResult,
 } from '@resume/application';
 import { copyResumeDocumentWithFreshIds, migrateResumeDocument } from '@resume/domain/resume';
 import type { Pool, PoolClient } from 'pg';
@@ -110,6 +117,105 @@ class PostgresResumeRepository implements ResumeRepository {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
+  }
+
+  async listDeleted(query: {
+    limit: number;
+    after?: { deletedAt: Date; id: string };
+  }): Promise<DeletedResumeMetadataRecord[]> {
+    const result = await this.client.query<{
+      id: string;
+      title: string;
+      locale: string;
+      stage: DeletedResumeMetadataRecord['stage'];
+      revision: string;
+      template_id: string;
+      template_version: string;
+      created_at: Date;
+      updated_at: Date;
+      deleted_at: Date;
+      restore_until: Date;
+    }>(`select * from list_deleted_resumes($1, $2, $3)`, [
+      query.limit,
+      query.after?.deletedAt ?? null,
+      query.after?.id ?? null,
+    ]);
+    return result.rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      locale: row.locale,
+      stage: row.stage,
+      revision: BigInt(row.revision),
+      templateId: row.template_id,
+      templateVersion: row.template_version,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      deletedAt: row.deleted_at,
+      restoreUntil: row.restore_until,
+    }));
+  }
+
+  async delete(command: DeleteResumeCommand): Promise<DeleteResumeResult> {
+    const result = await this.mutateLifecycle('delete', command);
+    const receipt = result.receipt as DeleteResumeReceipt;
+    return {
+      receipt: {
+        ...receipt,
+        deletedAt: new Date(receipt.deletedAt).toISOString(),
+        restoreUntil: new Date(receipt.restoreUntil).toISOString(),
+      },
+      replayed: result.replayed,
+    };
+  }
+
+  async undelete(command: UndeleteResumeCommand): Promise<UndeleteResumeResult> {
+    const result = await this.mutateLifecycle('undelete', command);
+    const receipt = result.receipt as RenameResumeReceipt;
+    return {
+      receipt: {
+        ...receipt,
+        resume: {
+          ...receipt.resume,
+          createdAt: new Date(receipt.resume.createdAt).toISOString(),
+          updatedAt: new Date(receipt.resume.updatedAt).toISOString(),
+        },
+      },
+      replayed: result.replayed,
+    };
+  }
+
+  private async mutateLifecycle(operation: 'delete' | 'undelete', command: DeleteResumeCommand) {
+    const requestHash = sha256CanonicalJson({
+      resumeId: command.resumeId,
+      baseRevision: command.baseRevision,
+    });
+    const result = await this.client.query<{
+      result_status: string;
+      response_body: DeleteResumeReceipt | RenameResumeReceipt | null;
+      current_revision: string | null;
+    }>(`select * from mutate_resume_lifecycle($1, $2, $3, $4, $5::bigint, $6, $7, $8, $9)`, [
+      operation,
+      command.resumeId,
+      command.idempotencyKey,
+      requestHash,
+      command.baseRevision,
+      randomUUID(),
+      randomUUID(),
+      randomUUID(),
+      command.traceId,
+    ]);
+    const row = result.rows[0];
+    if (!row) throw new Error('简历生命周期操作未返回结果');
+    if (row.result_status === 'not_found') throw new ResourceNotFoundError();
+    if (row.result_status === 'conflict') {
+      if (!row.current_revision) throw new Error('CAS 冲突未返回当前 revision');
+      throw new RevisionConflictError(row.current_revision);
+    }
+    if (row.result_status === 'key_reused') throw new IdempotencyKeyReusedError();
+    if (row.result_status === 'in_progress') throw new IdempotencyRequestInProgressError();
+    if (row.result_status === 'expired') throw new RestoreWindowExpiredError();
+    if (!row.response_body) throw new Error('简历生命周期操作未返回回执');
+    return { receipt: row.response_body, replayed: row.result_status === 'replayed' };
   }
 
   async rename(command: RenameResumeCommand): Promise<RenameResumeResult> {

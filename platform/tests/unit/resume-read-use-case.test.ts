@@ -39,10 +39,13 @@ function transactionsFor(result: PersistedResume | null, observedUsers: string[]
         resumes: {
           copy: () => Promise.reject(new Error('本测试不调用复制')),
           create: () => Promise.reject(new Error('本测试不调用创建')),
+          delete: () => Promise.reject(new Error('本测试不调用删除')),
           findActiveById: () => Promise.resolve(result),
           listActive: () => Promise.resolve([]),
+          listDeleted: () => Promise.resolve([]),
           rename: () => Promise.reject(new Error('本测试不调用重命名')),
           saveDocument: () => Promise.reject(new Error('本测试不调用保存')),
+          undelete: () => Promise.reject(new Error('本测试不调用恢复')),
         },
       })) as T;
     },

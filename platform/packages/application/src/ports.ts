@@ -56,6 +56,11 @@ export interface ResumeMetadataRecord {
   updatedAt: Date;
 }
 
+export interface DeletedResumeMetadataRecord extends ResumeMetadataRecord {
+  deletedAt: Date;
+  restoreUntil: Date;
+}
+
 export interface ResumeListQuery {
   limit: number;
   after?: { updatedAt: Date; id: string };
@@ -63,6 +68,10 @@ export interface ResumeListQuery {
 
 export interface ResumeListReader {
   listActive(query: ResumeListQuery): Promise<ResumeMetadataRecord[]>;
+  listDeleted(query: {
+    limit: number;
+    after?: { deletedAt: Date; id: string };
+  }): Promise<DeletedResumeMetadataRecord[]>;
 }
 
 export interface SaveResumeCommand {
@@ -155,11 +164,40 @@ export interface RenameResumeResult {
   replayed: boolean;
 }
 
+export interface DeleteResumeCommand {
+  resumeId: string;
+  idempotencyKey: string;
+  baseRevision: string;
+  traceId: string;
+}
+
+export interface DeleteResumeReceipt {
+  id: string;
+  revision: string;
+  deletedAt: string;
+  restoreUntil: string;
+  versionId: string;
+}
+
+export interface DeleteResumeResult {
+  receipt: DeleteResumeReceipt;
+  replayed: boolean;
+}
+
+export type UndeleteResumeCommand = DeleteResumeCommand;
+
+export interface UndeleteResumeResult {
+  receipt: RenameResumeReceipt;
+  replayed: boolean;
+}
+
 export interface ResumeWriter {
   copy(command: CopyResumeCommand): Promise<CopyResumeResult>;
   create(command: CreateResumeCommand): Promise<CreateResumeResult>;
+  delete(command: DeleteResumeCommand): Promise<DeleteResumeResult>;
   rename(command: RenameResumeCommand): Promise<RenameResumeResult>;
   saveDocument(command: SaveResumeCommand): Promise<SaveResumeResult>;
+  undelete(command: UndeleteResumeCommand): Promise<UndeleteResumeResult>;
 }
 
 export interface ResumeRepository extends ResumeReader, ResumeWriter, ResumeListReader {}

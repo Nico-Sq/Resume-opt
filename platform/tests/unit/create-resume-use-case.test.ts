@@ -37,10 +37,13 @@ function harness() {
         resumes: {
           copy: () => Promise.reject(new Error('本测试不调用复制')),
           create,
+          delete: () => Promise.reject(new Error('本测试不调用删除')),
           findActiveById: () => Promise.resolve(null),
           listActive: () => Promise.resolve([]),
+          listDeleted: () => Promise.resolve([]),
           rename: () => Promise.reject(new Error('本测试不调用重命名')),
           saveDocument: () => Promise.reject(new Error('本测试不调用保存')),
+          undelete: () => Promise.reject(new Error('本测试不调用恢复')),
         },
       });
     },

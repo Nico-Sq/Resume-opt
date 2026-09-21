@@ -30,6 +30,18 @@ export {
   type RenameResumeOutput,
 } from './resume/rename-resume';
 export {
+  DeleteResume,
+  InvalidDeletedResumeCursorError,
+  InvalidDeletedResumeListRequestError,
+  InvalidResumeLifecycleRequestError,
+  ListDeletedResumes,
+  RestoreWindowExpiredError,
+  UndeleteResume,
+  type DeletedResumeMetaDto,
+  type DeleteResumeInput,
+  type UndeleteResumeInput,
+} from './resume/resume-lifecycle';
+export {
   IdempotencyKeyReusedError,
   IdempotencyRequestInProgressError,
   InvalidSaveRequestError,
@@ -49,6 +61,10 @@ export type {
   CreateResumeReceipt,
   CreateResumeResult,
   CurrentIdentity,
+  DeleteResumeCommand,
+  DeleteResumeReceipt,
+  DeleteResumeResult,
+  DeletedResumeMetadataRecord,
   IdentityProvider,
   PersistedResume,
   ResumeListQuery,
@@ -66,5 +82,7 @@ export type {
   SessionProvider,
   UserTransaction,
   UserTransactionManager,
+  UndeleteResumeCommand,
+  UndeleteResumeResult,
 } from './ports';
 export { AuthenticationRequiredError } from './ports';

@@ -1,10 +1,13 @@
 import {
   CopyResume,
   CreateResume,
+  DeleteResume,
   GetResumeForEditor,
+  ListDeletedResumes,
   ListResumes,
   RenameResume,
   SaveResumeDocument,
+  UndeleteResume,
 } from '@resume/application';
 import { parseServerRuntimeConfig } from '@resume/config/server';
 import { FixedIdentityProvider } from '@resume/infrastructure/fixed-identity';
@@ -129,6 +132,27 @@ export function getListResumesUseCase(requestHeaders: Headers) {
 
 export function getRenameResumeUseCase(requestHeaders: Headers) {
   return new RenameResume(
+    getRequestIdentityProvider(requestHeaders),
+    new PostgresUserTransactionManager(getApplicationPool()),
+  );
+}
+
+export function getDeleteResumeUseCase(requestHeaders: Headers) {
+  return new DeleteResume(
+    getRequestIdentityProvider(requestHeaders),
+    new PostgresUserTransactionManager(getApplicationPool()),
+  );
+}
+
+export function getUndeleteResumeUseCase(requestHeaders: Headers) {
+  return new UndeleteResume(
+    getRequestIdentityProvider(requestHeaders),
+    new PostgresUserTransactionManager(getApplicationPool()),
+  );
+}
+
+export function getListDeletedResumesUseCase(requestHeaders: Headers) {
+  return new ListDeletedResumes(
     getRequestIdentityProvider(requestHeaders),
     new PostgresUserTransactionManager(getApplicationPool()),
   );
