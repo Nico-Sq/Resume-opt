@@ -1,4 +1,5 @@
 import {
+  CopyResume,
   CreateResume,
   GetResumeForEditor,
   ListResumes,
@@ -107,6 +108,13 @@ export function getSaveResumeDocumentUseCase(requestHeaders: Headers) {
 
 export function getCreateResumeUseCase(requestHeaders: Headers) {
   return new CreateResume(
+    getRequestIdentityProvider(requestHeaders),
+    new PostgresUserTransactionManager(getApplicationPool()),
+  );
+}
+
+export function getCopyResumeUseCase(requestHeaders: Headers) {
+  return new CopyResume(
     getRequestIdentityProvider(requestHeaders),
     new PostgresUserTransactionManager(getApplicationPool()),
   );

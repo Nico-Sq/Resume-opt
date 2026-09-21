@@ -5,6 +5,12 @@ export {
   type ResumeEditorDto,
 } from './resume/get-resume-for-editor';
 export {
+  CopyResume,
+  InvalidCopyResumeRequestError,
+  type CopyResumeInput,
+  type CopyResumeOutput,
+} from './resume/copy-resume';
+export {
   CreateResume,
   InvalidCreateResumeRequestError,
   type CreateResumeInput,
@@ -36,6 +42,8 @@ export {
 } from './resume/save-resume-document';
 export type {
   AuthenticatedSession,
+  CopyResumeCommand,
+  CopyResumeResult,
   CreateResumeCommand,
   CreateResumeMode,
   CreateResumeReceipt,

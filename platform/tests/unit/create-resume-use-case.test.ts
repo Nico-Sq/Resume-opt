@@ -35,6 +35,7 @@ function harness() {
       expect(currentUserId).toBe(userId);
       return work({
         resumes: {
+          copy: () => Promise.reject(new Error('本测试不调用复制')),
           create,
           findActiveById: () => Promise.resolve(null),
           listActive: () => Promise.resolve([]),

@@ -236,16 +236,53 @@ function createEntry(sectionValue: ContentSection, idFactory: IdFactory): unknow
   }
 }
 
-function cloneWithFreshIds(value: unknown, idFactory: IdFactory): unknown {
+function cloneWithFreshIds(value: unknown, idFactory: IdFactory, rootId?: string): unknown {
   if (Array.isArray(value)) return value.map((item) => cloneWithFreshIds(item, idFactory));
   if (value === null || typeof value !== 'object') return value;
 
   return Object.fromEntries(
     Object.entries(value).map(([key, child]) => [
       key,
-      key === 'id' ? idFactory() : cloneWithFreshIds(child, idFactory),
+      key === 'id' ? (rootId ?? idFactory()) : cloneWithFreshIds(child, idFactory),
     ]),
   );
+}
+
+export function copyResumeDocumentWithFreshIds(
+  document: ResumeDocumentV1,
+  idFactory: IdFactory = () => crypto.randomUUID(),
+): ResumeDocumentV1 {
+  const source = parseDocument(document);
+  const sectionIds = new Map(source.moduleOrder.map((id) => [id, idFactory()]));
+  const targetSectionId = (sourceId: string) => {
+    const targetId = sectionIds.get(sourceId);
+    if (!targetId) throw new Error('简历模块引用无效');
+    return targetId;
+  };
+  const sectionsById = Object.fromEntries(
+    source.moduleOrder.map((sourceId) => {
+      const targetId = targetSectionId(sourceId);
+      const sourceSection = source.sectionsById[sourceId];
+      if (!sourceSection) throw new Error('简历模块引用无效');
+      const targetSection = cloneWithFreshIds(sourceSection, idFactory, targetId) as ContentSection;
+      if (targetSection.kind === 'basic') {
+        for (const entry of targetSection.entries) entry.avatarAssetId = null;
+      }
+      return [targetId, targetSection];
+    }),
+  );
+  const moduleOverrides = Object.fromEntries(
+    Object.entries(source.typography.moduleOverrides).map(([sourceId, override]) => {
+      return [targetSectionId(sourceId), override];
+    }),
+  );
+
+  return parseDocument({
+    ...source,
+    sectionsById,
+    moduleOrder: source.moduleOrder.map(targetSectionId),
+    typography: { ...source.typography, moduleOverrides },
+  });
 }
 
 function setEntryField(

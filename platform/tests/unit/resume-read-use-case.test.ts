@@ -37,6 +37,7 @@ function transactionsFor(result: PersistedResume | null, observedUsers: string[]
       observedUsers.push(currentUserId);
       return (await work({
         resumes: {
+          copy: () => Promise.reject(new Error('本测试不调用复制')),
           create: () => Promise.reject(new Error('本测试不调用创建')),
           findActiveById: () => Promise.resolve(result),
           listActive: () => Promise.resolve([]),

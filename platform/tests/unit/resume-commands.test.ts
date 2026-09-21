@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   applyResumeEditCommand,
+  copyResumeDocumentWithFreshIds,
   createInitialResumeDocument,
   ResumeDocumentV1Schema,
   ResumeEditError,
@@ -29,6 +30,11 @@ function sectionByKind<K extends ContentSection['kind']>(
   return sectionValue;
 }
 
+function required<T>(value: T | undefined, message: string): T {
+  if (value === undefined) throw new Error(message);
+  return value;
+}
+
 function collectIds(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(collectIds);
   if (value === null || typeof value !== 'object') return [];
@@ -47,7 +53,106 @@ function withoutIds(value: unknown): unknown {
   );
 }
 
+function semanticProjection(document: ResumeDocumentV1): unknown {
+  const { sectionsById, moduleOrder, typography, ...rest } = document;
+  return {
+    ...rest,
+    sections: moduleOrder.map((id) => withoutIds(sectionsById[id])),
+    typography: {
+      ...typography,
+      moduleOverrides: moduleOrder.map((id) => typography.moduleOverrides[id] ?? null),
+    },
+  };
+}
+
 describe('resume edit commands', () => {
+  it('copies every content kind with fresh IDs and remaps section references', () => {
+    const sourceIds = deterministicIds(500);
+    let source = createDocument();
+    for (const kind of [
+      'education',
+      'work',
+      'project',
+      'internship',
+      'campus',
+      'skillsCertificates',
+      'awards',
+    ] as const) {
+      source = applyResumeEditCommand(
+        source,
+        { type: 'add-entry', sectionId: sectionByKind(source, kind).id },
+        { idFactory: sourceIds },
+      );
+    }
+    source = applyResumeEditCommand(
+      source,
+      { type: 'add-custom-section', title: '自定义模块' },
+      { idFactory: sourceIds },
+    );
+    const custom = sectionByKind(source, 'custom');
+    source = applyResumeEditCommand(
+      source,
+      { type: 'add-entry', sectionId: custom.id },
+      { idFactory: sourceIds },
+    );
+    for (const kind of ['summary', 'selfEvaluation'] as const) {
+      const sectionValue = sectionByKind(source, kind);
+      source = applyResumeEditCommand(
+        source,
+        {
+          type: 'add-text-block',
+          sectionId: sectionValue.id,
+          entryId: required(sectionValue.entries[0], `fixture 缺少 ${kind} 条目`).id,
+          field: 'blocks',
+        },
+        { idFactory: sourceIds },
+      );
+    }
+    const project = sectionByKind(source, 'project');
+    const projectEntry = required(project.entries[0], 'fixture 缺少项目条目');
+    for (const field of ['bullets', 'actions', 'results'] as const) {
+      source = applyResumeEditCommand(
+        source,
+        { type: 'add-text-block', sectionId: project.id, entryId: projectEntry.id, field },
+        { idFactory: sourceIds },
+      );
+    }
+    source = applyResumeEditCommand(
+      source,
+      { type: 'add-link', sectionId: project.id, entryId: projectEntry.id },
+      { idFactory: sourceIds },
+    );
+    const basic = sectionByKind(source, 'basic');
+    const basicEntry = required(basic.entries[0], 'fixture 缺少基本信息条目');
+    source = applyResumeEditCommand(
+      source,
+      { type: 'add-link', sectionId: basic.id, entryId: basicEntry.id },
+      { idFactory: sourceIds },
+    );
+    source = structuredClone(source);
+    required(sectionByKind(source, 'basic').entries[0], 'fixture 缺少基本信息条目').avatarAssetId =
+      sourceIds();
+    source.typography.moduleOverrides[project.id] = { fontSizePt: 12, fontWeight: 700 };
+    source = ResumeDocumentV1Schema.parse(source);
+
+    const copied = copyResumeDocumentWithFreshIds(source, deterministicIds(800));
+    const expected = structuredClone(source);
+    required(
+      sectionByKind(expected, 'basic').entries[0],
+      'fixture 缺少复制后基本信息条目',
+    ).avatarAssetId = null;
+    const sourceIdSet = new Set(collectIds(source));
+
+    expect(ResumeDocumentV1Schema.safeParse(copied).success).toBe(true);
+    expect(collectIds(copied).every((id) => !sourceIdSet.has(id))).toBe(true);
+    expect(new Set(collectIds(copied)).size).toBe(collectIds(copied).length);
+    expect(Object.keys(copied.sectionsById)).toEqual(copied.moduleOrder);
+    expect(Object.keys(copied.typography.moduleOverrides)).toEqual([
+      sectionByKind(copied, 'project').id,
+    ]);
+    expect(semanticProjection(copied)).toEqual(semanticProjection(expected));
+  });
+
   it('updates existing scalar fields without mutating the source or changing IDs', () => {
     const source = createDocument();
     const project = sectionByKind(source, 'project');

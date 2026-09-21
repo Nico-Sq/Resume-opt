@@ -6,6 +6,8 @@ import {
   ResourceNotFoundError,
   RevisionConflictError,
   TemplateUnavailableError,
+  type CopyResumeCommand,
+  type CopyResumeResult,
   type CreateResumeCommand,
   type CreateResumeReceipt,
   type CreateResumeResult,
@@ -22,6 +24,7 @@ import {
   type UserTransaction,
   type UserTransactionManager,
 } from '@resume/application';
+import { copyResumeDocumentWithFreshIds, migrateResumeDocument } from '@resume/domain/resume';
 import type { Pool, PoolClient } from 'pg';
 
 import { sha256CanonicalJson } from './canonical-json';
@@ -242,6 +245,136 @@ class PostgresResumeRepository implements ResumeRepository {
       ],
     );
     return { receipt, replayed: false };
+  }
+
+  async copy(command: CopyResumeCommand): Promise<CopyResumeResult> {
+    const source = await this.client.query<PersistedResumeRow>(
+      `select id, user_id, title, document, revision::text, schema_version,
+              template_id, template_version, updated_at
+         from resumes
+        where id = $1 and user_id = $2 and deleted_at is null
+        for update`,
+      [command.sourceResumeId, this.userId],
+    );
+    const sourceRow = source.rows[0];
+    if (!sourceRow) throw new ResourceNotFoundError();
+
+    const requestHash = sha256CanonicalJson({
+      sourceResumeId: command.sourceResumeId,
+      sourceRevision: command.sourceRevision,
+      title: command.title,
+    });
+    const claimed = await this.client.query(
+      `insert into idempotency_requests
+        (user_id, operation, key, request_hash, status, expires_at)
+       values ($1, 'resume.copy', $2, $3, 'processing', clock_timestamp() + interval '7 days')
+       on conflict do nothing
+       returning key`,
+      [this.userId, command.idempotencyKey, requestHash],
+    );
+    if (!claimed.rowCount) {
+      const existing = await this.client.query<{
+        request_hash: string;
+        status: string;
+        response_body: CreateResumeReceipt | null;
+      }>(
+        `select request_hash, status, response_body
+           from idempotency_requests
+          where user_id = $1 and operation = 'resume.copy' and key = $2
+          for update`,
+        [this.userId, command.idempotencyKey],
+      );
+      const row = existing.rows[0];
+      if (!row) throw new Error('幂等声明在冲突后不可见');
+      if (row.request_hash !== requestHash) throw new IdempotencyKeyReusedError();
+      if (row.status !== 'completed' || !row.response_body) {
+        throw new IdempotencyRequestInProgressError();
+      }
+      const resume = await this.findActiveById(row.response_body.resumeId);
+      if (!resume) throw new ResourceNotFoundError();
+      return { resume, receipt: row.response_body, replayed: true };
+    }
+    if (sourceRow.revision !== command.sourceRevision) {
+      throw new RevisionConflictError(sourceRow.revision);
+    }
+
+    const document = copyResumeDocumentWithFreshIds(migrateResumeDocument(sourceRow.document));
+    const template = await this.client.query<{ renderer_version: string }>(
+      `select renderer_version from templates
+        where template_id = $1 and version = $2 and status <> 'draft'`,
+      [document.templateId, document.templateVersion],
+    );
+    const templateRow = template.rows[0];
+    if (!templateRow) throw new TemplateUnavailableError();
+
+    const inserted = await this.client.query<PersistedResumeRow>(
+      `insert into resumes
+        (id, user_id, title, document, revision, schema_version, template_id, template_version)
+       values ($1, $2, $3, $4::jsonb, 1, $5, $6, $7)
+       returning id, user_id, title, document, revision::text, schema_version,
+                 template_id, template_version, updated_at`,
+      [
+        command.targetResumeId,
+        this.userId,
+        command.title,
+        JSON.stringify(document),
+        document.schemaVersion,
+        document.templateId,
+        document.templateVersion,
+      ],
+    );
+    const insertedRow = inserted.rows[0];
+    if (!insertedRow) throw new Error('复制简历未返回记录');
+
+    const versionId = randomUUID();
+    const contentHash = sha256CanonicalJson(document);
+    await this.client.query(
+      `insert into resume_versions
+        (id, resume_id, user_id, revision, title_snapshot, schema_version,
+         template_id, template_version, renderer_version, snapshot, content_hash, reason)
+       values ($1, $2, $3, 1, $4, $5, $6, $7, $8, $9::jsonb, $10, 'initial')`,
+      [
+        versionId,
+        command.targetResumeId,
+        this.userId,
+        command.title,
+        document.schemaVersion,
+        document.templateId,
+        document.templateVersion,
+        templateRow.renderer_version,
+        JSON.stringify(document),
+        contentHash,
+      ],
+    );
+    const receipt: CreateResumeReceipt = {
+      resumeId: command.targetResumeId,
+      revision: '1',
+      versionId,
+    };
+    await this.client.query(
+      `update idempotency_requests
+          set status = 'completed', response_body = $1::jsonb
+        where user_id = $2 and operation = 'resume.copy' and key = $3`,
+      [JSON.stringify(receipt), this.userId, command.idempotencyKey],
+    );
+    await this.client.query(
+      `insert into audit_events
+        (id, actor_user_id, action, resource_type, resource_id, trace_id, result_code, metadata)
+       values ($1, $2, 'resume.copy', 'resume', $3, $4, 'COPIED', $5::jsonb)`,
+      [
+        randomUUID(),
+        this.userId,
+        command.targetResumeId,
+        command.traceId,
+        JSON.stringify({
+          sourceResumeId: command.sourceResumeId,
+          sourceRevision: command.sourceRevision,
+          revision: '1',
+          versionId,
+        }),
+      ],
+    );
+    return { resume: toPersistedResume(insertedRow), receipt, replayed: false };
   }
 
   async create(command: CreateResumeCommand): Promise<CreateResumeResult> {

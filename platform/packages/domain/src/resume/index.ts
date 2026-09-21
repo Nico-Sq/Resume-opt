@@ -1,5 +1,6 @@
 export {
   applyResumeEditCommand,
+  copyResumeDocumentWithFreshIds,
   ResumeEditError,
   type EditablePrimitive,
   type ResumeEditCommand,

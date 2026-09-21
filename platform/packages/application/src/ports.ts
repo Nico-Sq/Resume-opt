@@ -98,6 +98,21 @@ export interface CreateResumeResult {
   replayed: boolean;
 }
 
+export interface CopyResumeCommand {
+  sourceResumeId: string;
+  targetResumeId: string;
+  idempotencyKey: string;
+  sourceRevision: string;
+  title: string;
+  traceId: string;
+}
+
+export interface CopyResumeResult {
+  resume: PersistedResume;
+  receipt: CreateResumeReceipt;
+  replayed: boolean;
+}
+
 export interface SaveReceipt {
   resumeId: string;
   revision: string;
@@ -141,6 +156,7 @@ export interface RenameResumeResult {
 }
 
 export interface ResumeWriter {
+  copy(command: CopyResumeCommand): Promise<CopyResumeResult>;
   create(command: CreateResumeCommand): Promise<CreateResumeResult>;
   rename(command: RenameResumeCommand): Promise<RenameResumeResult>;
   saveDocument(command: SaveResumeCommand): Promise<SaveResumeResult>;
