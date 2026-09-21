@@ -16,6 +16,7 @@ import {
   type RenderFlowBlock,
 } from '@resume/resume-renderer';
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -25,6 +26,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 
+import { AccountExitBarrier } from '../account/account-exit-barrier';
 import {
   createResumeEditorStore,
   ResumeEditorStoreProvider,
@@ -64,6 +66,8 @@ export interface EditorResume {
 }
 
 export interface EditorWorkspaceProps {
+  accountUserId?: string | undefined;
+  canSignOut?: boolean | undefined;
   initialResume: EditorResume;
   store?: ResumeEditorStore;
   localDraft?: EditorLocalDraftContext;
@@ -87,6 +91,12 @@ type ConflictViewState =
       context: NonNullable<ReturnType<SaveCoordinator['getConflictContext']>>;
       remote: Awaited<ReturnType<ConflictSnapshotTransport['loadCurrent']>>;
     };
+
+type AccountExitState =
+  | { status: 'idle' }
+  | { status: 'preparing' }
+  | { status: 'decision'; unsyncedCount: number; confirmDiscard: boolean }
+  | { status: 'error'; message: string };
 
 const repeatableKinds = new Set<ContentSection['kind']>([
   'education',
@@ -226,7 +236,18 @@ function classNames(...values: Array<string | false | undefined>): string {
   return values.filter((value): value is string => typeof value === 'string').join(' ');
 }
 
+function downloadJson(content: string, filename: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: 'application/json;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export function EditorWorkspace({
+  accountUserId,
+  canSignOut = false,
   initialResume,
   store: providedStore,
   localDraft,
@@ -262,12 +283,28 @@ export function EditorWorkspace({
   );
   const localDraftControllerRef = useRef<LocalDraftController | null>(null);
   const saveCoordinatorRef = useRef<SaveCoordinator | null>(null);
+  const accountBarrierRef = useRef<AccountExitBarrier | null>(null);
+  const accountLockedRef = useRef(false);
+  const [accountLocked, setAccountLocked] = useState(false);
+  const [accountExit, setAccountExit] = useState<AccountExitState>({ status: 'idle' });
   const [resolvedConflictTransport] = useState(
     () => conflictSnapshotTransport ?? new HttpConflictSnapshotTransport(),
   );
   const [conflictView, setConflictView] = useState<ConflictViewState>({ status: 'idle' });
   const [conflictOpen, setConflictOpen] = useState(false);
   const [conflictLoadAttempt, setConflictLoadAttempt] = useState(0);
+
+  const prepareAccountExit = useCallback(async () => {
+    if (accountLockedRef.current) return;
+    accountLockedRef.current = true;
+    setAccountLocked(true);
+    setAccountExit((state) => (state.status === 'idle' ? { status: 'preparing' } : state));
+    saveCoordinatorRef.current?.dispose();
+    saveCoordinatorRef.current = null;
+    const controller = localDraftControllerRef.current;
+    localDraftControllerRef.current = null;
+    await controller?.dispose();
+  }, []);
 
   useEffect(() => {
     if (!localDraft) return;
@@ -283,8 +320,11 @@ export function EditorWorkspace({
     });
     localDraftControllerRef.current = controller;
     let disposed = false;
-    void controller.start().then(() => {
-      if (disposed) return;
+    void controller.start().then(async () => {
+      if (disposed || accountLockedRef.current) {
+        await controller.dispose();
+        return;
+      }
       const saveCoordinator = new SaveCoordinator({
         resumeId: initialResume.id,
         store,
@@ -316,6 +356,58 @@ export function EditorWorkspace({
     saveTransport,
     store,
   ]);
+
+  useEffect(() => {
+    if (!accountUserId || !localDraft) return;
+    let disposed = false;
+    let barrier: AccountExitBarrier;
+    try {
+      barrier = new AccountExitBarrier({
+        userId: accountUserId,
+        onPrepare: prepareAccountExit,
+        onCancel: () => {
+          window.location.reload();
+        },
+        onComplete: () => {
+          window.location.replace('/login');
+        },
+      });
+    } catch (error) {
+      queueMicrotask(() => {
+        if (disposed) return;
+        setAccountExit({
+          status: 'error',
+          message: error instanceof Error ? error.message : '当前浏览器无法安全退出账户',
+        });
+      });
+      return () => {
+        disposed = true;
+      };
+    }
+    accountBarrierRef.current = barrier;
+    const maskOnPageHide = () => {
+      accountLockedRef.current = true;
+      setAccountLocked(true);
+    };
+    const revalidateBfcache = (event: PageTransitionEvent) => {
+      if (event.persisted) window.location.reload();
+    };
+    const revalidateVisibility = () => {
+      if (document.visibilityState === 'hidden') maskOnPageHide();
+      else if (accountLockedRef.current) window.location.reload();
+    };
+    window.addEventListener('pagehide', maskOnPageHide);
+    window.addEventListener('pageshow', revalidateBfcache);
+    document.addEventListener('visibilitychange', revalidateVisibility);
+    return () => {
+      disposed = true;
+      window.removeEventListener('pagehide', maskOnPageHide);
+      window.removeEventListener('pageshow', revalidateBfcache);
+      document.removeEventListener('visibilitychange', revalidateVisibility);
+      if (accountBarrierRef.current === barrier) accountBarrierRef.current = null;
+      barrier.dispose();
+    };
+  }, [accountUserId, localDraft, prepareAccountExit]);
 
   useEffect(() => {
     const protectUnsyncedExit = (event: BeforeUnloadEvent) => {
@@ -367,15 +459,88 @@ export function EditorWorkspace({
   const exportRescue = () => {
     const controller = localDraftControllerRef.current;
     if (!controller) return;
-    const blob = new Blob([controller.createCurrentRescueJson()], {
-      type: 'application/json;charset=utf-8',
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `resume-draft-${initialResume.id}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadJson(controller.createCurrentRescueJson(), `resume-draft-${initialResume.id}.json`);
+  };
+
+  const inspectAccountDrafts = async () => {
+    if (!accountUserId) throw new Error('缺少账户上下文');
+    if (!localDraft) throw new Error('本地草稿不可用');
+    const rescueJson = await localDraft.repository.exportAccountRescue(accountUserId);
+    const payload = JSON.parse(rescueJson) as { drafts: LocalDraftRecord[] };
+    return {
+      rescueJson,
+      unsyncedCount: payload.drafts.filter(hasUnsyncedLocalChanges).length,
+    };
+  };
+
+  const finishAccountExit = async (mode: 'synced' | 'rescue' | 'discard') => {
+    const barrier = accountBarrierRef.current;
+    if (!barrier || !accountUserId) return;
+    setAccountExit({ status: 'preparing' });
+    try {
+      const completed = await barrier.runExclusive(async () => {
+        const latest = await inspectAccountDrafts();
+        if (latest.unsyncedCount > 0 && mode === 'synced') {
+          setAccountExit({
+            status: 'decision',
+            unsyncedCount: latest.unsyncedCount,
+            confirmDiscard: false,
+          });
+          return false;
+        }
+        if (mode === 'rescue') {
+          downloadJson(latest.rescueJson, `resume-account-${accountUserId}-drafts.json`);
+        }
+        const response = await fetch('/api/auth/sign-out', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        if (!response.ok) throw new Error('服务端尚未确认退出');
+        if (!localDraft) throw new Error('本地草稿不可用');
+        await localDraft.repository.clearAccount(accountUserId, { rescueConfirmed: true });
+        return true;
+      });
+      if (completed) barrier.complete();
+    } catch {
+      setAccountExit({
+        status: 'error',
+        message: '退出尚未完成，服务端会话或本地清理未确认；草稿仍被保留。',
+      });
+    }
+  };
+
+  const beginAccountExit = async () => {
+    const barrier = accountBarrierRef.current;
+    if (!barrier) {
+      setAccountExit({ status: 'error', message: '当前浏览器无法安全协调多标签页退出。' });
+      return;
+    }
+    setAccountExit({ status: 'preparing' });
+    try {
+      const result = await barrier.runExclusive(inspectAccountDrafts);
+      if (result.unsyncedCount > 0) {
+        setAccountExit({
+          status: 'decision',
+          unsyncedCount: result.unsyncedCount,
+          confirmDiscard: false,
+        });
+      } else {
+        await finishAccountExit('synced');
+      }
+    } catch {
+      setAccountExit({
+        status: 'error',
+        message: '未能确认所有标签页均已暂停，账户没有退出，本地草稿未清理。',
+      });
+    }
+  };
+
+  const cancelAccountExit = () => {
+    const barrier = accountBarrierRef.current;
+    if (barrier) barrier.cancel();
+    else window.location.reload();
   };
 
   const flushSave = () => saveCoordinatorRef.current?.flush() ?? Promise.resolve();
@@ -401,15 +566,21 @@ export function EditorWorkspace({
   return (
     <ResumeEditorStoreProvider store={store}>
       <EditorWorkspaceContent
+        accountExit={accountExit}
+        accountLocked={accountLocked}
+        canSignOut={Boolean(accountUserId && canSignOut)}
         cloudSaveStatus={cloudSaveStatus}
         conflictOpen={conflictOpen}
         conflictView={conflictView}
         localDraftStatus={localDraftStatus}
         onAdoptRemote={adoptRemote}
+        onBeginAccountExit={beginAccountExit}
+        onCancelAccountExit={cancelAccountExit}
         onCloseConflict={() => {
           setConflictOpen(false);
         }}
         onExportRescue={exportRescue}
+        onFinishAccountExit={finishAccountExit}
         onFlushSave={flushSave}
         onOpenConflict={() => {
           setConflictOpen(true);
@@ -419,6 +590,11 @@ export function EditorWorkspace({
           setConflictLoadAttempt((attempt) => attempt + 1);
         }}
         onRetrySave={retrySave}
+        onShowDiscardConfirmation={() => {
+          setAccountExit((state) =>
+            state.status === 'decision' ? { ...state, confirmDiscard: true } : state,
+          );
+        }}
         resume={initialResume}
       />
     </ResumeEditorStoreProvider>
@@ -427,20 +603,30 @@ export function EditorWorkspace({
 
 function EditorWorkspaceContent({
   resume,
+  accountExit,
+  accountLocked,
+  canSignOut,
   cloudSaveStatus,
   conflictOpen,
   conflictView,
   localDraftStatus,
   onAdoptRemote,
+  onBeginAccountExit,
+  onCancelAccountExit,
   onCloseConflict,
   onExportRescue,
+  onFinishAccountExit,
   onFlushSave,
   onOpenConflict,
   onRebaseLocal,
   onRetryConflictLoad,
   onRetrySave,
+  onShowDiscardConfirmation,
 }: {
   resume: EditorResume;
+  accountExit: AccountExitState;
+  accountLocked: boolean;
+  canSignOut: boolean;
   cloudSaveStatus: SaveCoordinatorStatus | null;
   conflictOpen: boolean;
   conflictView: ConflictViewState;
@@ -448,8 +634,11 @@ function EditorWorkspaceContent({
   onAdoptRemote: (
     remote: Awaited<ReturnType<ConflictSnapshotTransport['loadCurrent']>>,
   ) => Promise<void>;
+  onBeginAccountExit: () => Promise<void>;
+  onCancelAccountExit: () => void;
   onCloseConflict: () => void;
   onExportRescue: () => void;
+  onFinishAccountExit: (mode: 'synced' | 'rescue' | 'discard') => Promise<void>;
   onFlushSave: () => Promise<void>;
   onOpenConflict: () => void;
   onRebaseLocal: (
@@ -457,6 +646,7 @@ function EditorWorkspaceContent({
   ) => Promise<void>;
   onRetryConflictLoad: () => void;
   onRetrySave: () => Promise<void>;
+  onShowDiscardConfirmation: () => void;
 }) {
   const resumeDocument = useResumeEditorStore((state) => state.document);
   const dispatch = useResumeEditorStore((state) => state.dispatch);
@@ -691,6 +881,7 @@ function EditorWorkspaceContent({
         styles.editorShell,
         !leftOpen && styles.leftCollapsed,
         !rightOpen && styles.rightCollapsed,
+        accountLocked && styles.accountLocked,
       )}
       data-editor-shell
     >
@@ -748,6 +939,11 @@ function EditorWorkspaceContent({
             <EditorIcon name="redo" size={19} />
             <span>重做</span>
           </button>
+          {canSignOut ? (
+            <button onClick={() => void onBeginAccountExit()} type="button">
+              退出
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -1285,6 +1481,71 @@ function EditorWorkspaceContent({
           </button>
         ) : null}
       </nav>
+      {accountExit.status !== 'idle' ? (
+        <div className={styles.dialogBackdrop}>
+          <section
+            aria-labelledby="account-exit-title"
+            aria-modal="true"
+            className={styles.conflictDialog}
+            role="dialog"
+          >
+            <header className={styles.conflictHeader}>
+              <div>
+                <span className={styles.eyebrow}>账户安全</span>
+                <h2 id="account-exit-title">
+                  {accountExit.status === 'preparing'
+                    ? '正在暂停所有编辑标签页'
+                    : accountExit.status === 'error'
+                      ? '尚未完成退出'
+                      : accountExit.confirmDiscard
+                        ? '确认放弃未同步修改'
+                        : '退出前处理本地修改'}
+                </h2>
+              </div>
+            </header>
+            <p className={styles.conflictDescription}>
+              {accountExit.status === 'preparing'
+                ? '正在落盘本地修改并等待其他标签页停止上传。'
+                : accountExit.status === 'error'
+                  ? accountExit.message
+                  : accountExit.confirmDiscard
+                    ? `将永久清除本机该账户的 ${String(accountExit.unsyncedCount)} 份未同步草稿。此操作无法撤销。`
+                    : `发现 ${String(accountExit.unsyncedCount)} 份未同步草稿。请先保存，或下载救援副本后退出。`}
+            </p>
+            {accountExit.status === 'decision' ? (
+              <footer className={styles.conflictActions}>
+                <button onClick={onCancelAccountExit} type="button">
+                  返回编辑并先保存
+                </button>
+                {!accountExit.confirmDiscard ? (
+                  <>
+                    <button onClick={() => void onFinishAccountExit('rescue')} type="button">
+                      下载救援并退出
+                    </button>
+                    <button onClick={onShowDiscardConfirmation} type="button">
+                      放弃修改
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => void onFinishAccountExit('discard')} type="button">
+                    确认放弃并退出
+                  </button>
+                )}
+              </footer>
+            ) : null}
+            {accountExit.status === 'error' ? (
+              <footer className={styles.conflictActions}>
+                <button onClick={onCancelAccountExit} type="button">
+                  返回编辑
+                </button>
+                <button onClick={() => void onBeginAccountExit()} type="button">
+                  重新检查并退出
+                </button>
+              </footer>
+            ) : null}
+          </section>
+        </div>
+      ) : null}
       {cloudSaveStatus?.phase === 'auth-paused' ? (
         <section
           aria-label="登录状态通知"

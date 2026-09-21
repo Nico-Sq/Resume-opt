@@ -41,6 +41,9 @@
   height: 100vh;
   overflow: hidden;
 }
+.accountLocked > :not(.dialogBackdrop) {
+  visibility: hidden;
+}
 
 .editorShell.leftCollapsed {
   grid-template-columns: 48px 0 minmax(320px, 1fr) var(--right-panel-width) 48px;

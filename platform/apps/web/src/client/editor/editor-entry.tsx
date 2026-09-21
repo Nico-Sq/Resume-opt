@@ -47,6 +47,7 @@ type LoadState =
       resume: EditorResume;
       localDraft: EditorLocalDraftContext;
       saveTransport: HttpSaveTransport;
+      accountUserId: string;
     }
   | { status: 'error'; message: string };
 
@@ -59,6 +60,7 @@ async function loadEditorResume(
   resume: EditorResume;
   localDraft: EditorLocalDraftContext;
   saveTransport: HttpSaveTransport;
+  accountUserId: string;
 }> {
   let userId = fixedUserId;
   if (!userId) {
@@ -122,6 +124,7 @@ async function loadEditorResume(
       ...(initialError ? { initialError } : {}),
     },
     saveTransport: new HttpSaveTransport(undefined, csrfToken),
+    accountUserId: userId,
   };
 }
 
@@ -140,8 +143,14 @@ export function EditorEntry({
   useEffect(() => {
     const controller = new AbortController();
     void loadEditorResume(resumeId, fixedUserId, csrfRequired, controller.signal).then(
-      ({ resume, localDraft, saveTransport }) => {
-        setState({ status: 'ready', resume, localDraft, saveTransport });
+      ({ resume, localDraft, saveTransport, accountUserId }) => {
+        setState({
+          status: 'ready',
+          resume,
+          localDraft,
+          saveTransport,
+          accountUserId,
+        });
       },
       (error: unknown) => {
         if (controller.signal.aborted) return;
@@ -159,6 +168,8 @@ export function EditorEntry({
   if (state.status === 'ready') {
     return (
       <EditorWorkspace
+        accountUserId={state.accountUserId}
+        canSignOut={csrfRequired}
         initialResume={state.resume}
         localDraft={state.localDraft}
         saveTransport={state.saveTransport}

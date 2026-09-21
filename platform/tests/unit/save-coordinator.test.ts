@@ -224,6 +224,35 @@ describe('SaveCoordinator', () => {
     coordinator.dispose();
   });
 
+  it('ignores an ACK that arrives after the editor context was destroyed', async () => {
+    const document = createInitialResumeDocument();
+    const sectionId = editableSectionId(document);
+    const store = createResumeEditorStore({ document, revision: '1' });
+    const persistence = new MemorySavePersistence(store);
+    const transport = new ControlledTransport();
+    const coordinator = new SaveCoordinator({
+      resumeId: randomUUID(),
+      store,
+      persistence,
+      transport,
+      debounceMs: 0,
+      onStatus: () => undefined,
+    });
+    coordinator.start();
+    store.getState().dispatch({ type: 'set-section-title', sectionId, title: '账户A私有修改' });
+    await vi.advanceTimersByTimeAsync(0);
+    const request = transport.calls[0];
+    if (!request) throw new Error('缺少退出前保存请求');
+
+    coordinator.dispose();
+    request.result.resolve(receipt(request.envelope, '2'));
+    await settle();
+
+    expect(store.getState()).toMatchObject({ ackRevision: '1', ackedSeq: 0, isDirty: true });
+    expect(persistence.pending).toEqual(request.envelope);
+    expect(persistence.acknowledged).toHaveLength(0);
+  });
+
   it('replays a lost-response envelope with the original key and frozen body', async () => {
     const document = createInitialResumeDocument();
     const sectionId = editableSectionId(document);

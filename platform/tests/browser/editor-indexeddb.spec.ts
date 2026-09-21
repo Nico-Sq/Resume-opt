@@ -31,64 +31,73 @@ function percentile95(samples: number[]): number {
   return ordered[Math.ceil(ordered.length * 0.95) - 1] ?? Number.POSITIVE_INFINITY;
 }
 
-async function readDraft(page: Page): Promise<DraftSummary | null> {
-  return page.evaluate(async (databaseName) => {
-    const database = await new Promise<IDBDatabase>((resolveDatabase, reject) => {
-      const request = indexedDB.open(databaseName);
-      request.onerror = () => {
-        reject(request.error ?? new Error('IndexedDB 打开失败'));
-      };
-      request.onsuccess = () => {
-        resolveDatabase(request.result);
-      };
-    });
-    try {
-      const records = await new Promise<unknown[]>((resolveRecords, reject) => {
-        const transaction = database.transaction('drafts', 'readonly');
-        const request = transaction.objectStore('drafts').getAll();
+async function readDraft(page: Page, expectedName?: string): Promise<DraftSummary | null> {
+  return page.evaluate(
+    async ({ databaseName, expectedName: expected }) => {
+      const database = await new Promise<IDBDatabase>((resolveDatabase, reject) => {
+        const request = indexedDB.open(databaseName);
         request.onerror = () => {
-          reject(request.error ?? new Error('IndexedDB 读取失败'));
+          reject(request.error ?? new Error('IndexedDB 打开失败'));
         };
         request.onsuccess = () => {
-          resolveRecords(request.result as unknown[]);
+          resolveDatabase(request.result);
         };
       });
-      const record = records[0] as
-        | {
-            localSeq: number;
-            ackedSeq: number;
-            pendingEnvelope: { baseRevision: string; idempotencyKey: string } | null;
-            workingSnapshot: {
-              sectionsById: Record<
-                string,
-                {
-                  kind: string;
-                  entries: Array<{ name?: string; blocks?: Array<{ text?: string }> }>;
-                }
-              >;
-            };
-          }
-        | undefined;
-      if (!record) return null;
-      const basic = Object.values(record.workingSnapshot.sectionsById).find(
-        (section) => section.kind === 'basic',
-      );
-      const summary = Object.values(record.workingSnapshot.sectionsById).find(
-        (section) => section.kind === 'summary',
-      );
-      return {
-        name: basic?.entries[0]?.name ?? '',
-        summary: summary?.entries[0]?.blocks?.[0]?.text ?? '',
-        localSeq: record.localSeq,
-        ackedSeq: record.ackedSeq,
-        pending: record.pendingEnvelope !== null,
-        pendingBaseRevision: record.pendingEnvelope?.baseRevision ?? null,
-        pendingKey: record.pendingEnvelope?.idempotencyKey ?? null,
-      };
-    } finally {
-      database.close();
-    }
-  }, DATABASE_NAME);
+      try {
+        const records = await new Promise<unknown[]>((resolveRecords, reject) => {
+          const transaction = database.transaction('drafts', 'readonly');
+          const request = transaction.objectStore('drafts').getAll();
+          request.onerror = () => {
+            reject(request.error ?? new Error('IndexedDB 读取失败'));
+          };
+          request.onsuccess = () => {
+            resolveRecords(request.result as unknown[]);
+          };
+        });
+        const typedRecords = records as Array<{
+          localSeq: number;
+          ackedSeq: number;
+          pendingEnvelope: { baseRevision: string; idempotencyKey: string } | null;
+          workingSnapshot: {
+            sectionsById: Record<
+              string,
+              {
+                kind: string;
+                entries: Array<{ name?: string; blocks?: Array<{ text?: string }> }>;
+              }
+            >;
+          };
+        }>;
+        const record = expected
+          ? typedRecords.find((candidate) => {
+              const basic = Object.values(candidate.workingSnapshot.sectionsById).find(
+                (section) => section.kind === 'basic',
+              );
+              return basic?.entries[0]?.name === expected;
+            })
+          : typedRecords[0];
+        if (!record) return null;
+        const basic = Object.values(record.workingSnapshot.sectionsById).find(
+          (section) => section.kind === 'basic',
+        );
+        const summary = Object.values(record.workingSnapshot.sectionsById).find(
+          (section) => section.kind === 'summary',
+        );
+        return {
+          name: basic?.entries[0]?.name ?? '',
+          summary: summary?.entries[0]?.blocks?.[0]?.text ?? '',
+          localSeq: record.localSeq,
+          ackedSeq: record.ackedSeq,
+          pending: record.pendingEnvelope !== null,
+          pendingBaseRevision: record.pendingEnvelope?.baseRevision ?? null,
+          pendingKey: record.pendingEnvelope?.idempotencyKey ?? null,
+        };
+      } finally {
+        database.close();
+      }
+    },
+    { databaseName: DATABASE_NAME, expectedName },
+  );
 }
 
 async function updateNameAndMeasure(nameInput: Locator, name: string): Promise<BrowserSample> {
@@ -232,6 +241,78 @@ test('401 后保全 IndexedDB 信封并在同账户刷新后用原键恢复', as
     originalName,
   );
   await expect(page.getByText('已保存', { exact: true })).toBeVisible({ timeout: 15_000 });
+});
+
+test('退出广播暂停多标签页且取消后保留原账户草稿，恢复页面先遮蔽再复核', async ({
+  context,
+  page,
+}) => {
+  const secondPage = await context.newPage();
+  await Promise.all([page.goto('/'), secondPage.goto('/')]);
+  await Promise.all([
+    expect(page.getByRole('textbox', { name: '姓名', exact: true })).toBeVisible(),
+    expect(secondPage.getByRole('textbox', { name: '姓名', exact: true })).toBeVisible(),
+  ]);
+  await secondPage.route(`**/api/v1/resumes/${FIXED_RESUME_ID}/document`, (route) =>
+    route.abort('failed'),
+  );
+  const unsyncedName = `多标签页救援-${String(Date.now())}`;
+  await secondPage.getByRole('textbox', { name: '姓名', exact: true }).fill(unsyncedName);
+  await secondPage.getByRole('textbox', { name: '姓名', exact: true }).press('Tab');
+  await expect
+    .poll(async () => (await readDraft(secondPage, unsyncedName))?.name)
+    .toBe(unsyncedName);
+
+  await page.evaluate((userId) => {
+    const channel = new BroadcastChannel('resume-opt-account-exit-v1');
+    channel.postMessage({ type: 'prepare', userId, requestId: crypto.randomUUID() });
+    channel.close();
+  }, '00000000-0000-4000-8000-000000000001');
+  await Promise.all([
+    expect(page.getByRole('dialog', { name: '正在暂停所有编辑标签页' })).toBeVisible(),
+    expect(secondPage.getByRole('dialog', { name: '正在暂停所有编辑标签页' })).toBeVisible(),
+  ]);
+
+  await page.evaluate((userId) => {
+    const channel = new BroadcastChannel('resume-opt-account-exit-v1');
+    channel.postMessage({ type: 'cancel', userId, requestId: crypto.randomUUID() });
+    channel.close();
+  }, '00000000-0000-4000-8000-000000000001');
+  await expect(secondPage.getByRole('textbox', { name: '姓名', exact: true })).toHaveValue(
+    unsyncedName,
+  );
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+  });
+  await expect
+    .poll(() =>
+      page
+        .locator('[data-editor-shell] > header')
+        .evaluate((element) => getComputedStyle(element).visibility),
+    )
+    .toBe('hidden');
+  await page.evaluate(() => {
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+  });
+  await expect(page.getByRole('textbox', { name: '姓名', exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect
+    .poll(() =>
+      page
+        .locator('[data-editor-shell] > header')
+        .evaluate((element) => getComputedStyle(element).visibility),
+    )
+    .toBe('hidden');
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(page.getByRole('textbox', { name: '姓名', exact: true })).toBeVisible();
+  await secondPage.close();
 });
 
 test('滚动只归属编辑器内部且普通长页面可以滚动', async ({ page }) => {

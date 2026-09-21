@@ -206,6 +206,10 @@ export class SaveCoordinator {
     return !this.#disposed && this.#terminalPhase === null && this.#retryTimer === null;
   }
 
+  #isDisposed(): boolean {
+    return this.#disposed;
+  }
+
   async #performSave(): Promise<void> {
     const envelope = await this.#prepareEnvelope();
     if (!envelope || this.#disposed) return;
@@ -215,6 +219,7 @@ export class SaveCoordinator {
     this.#abortController = abortController;
     try {
       const receipt = await this.options.transport.save(envelope, abortController.signal);
+      if (this.#isDisposed()) return;
       await this.#acknowledge(envelope, receipt);
     } catch (error) {
       this.#handleFailure(envelope, error);

@@ -25,6 +25,7 @@ import { createResumeEditorStore } from '../../apps/web/src/client/editor/store'
 
 class MemoryLocalDraftRepository implements LocalDraftRepository {
   record: LocalDraftRecord | null = null;
+  clearAccountCalls = 0;
 
   get(): Promise<LocalDraftRecord | null> {
     return Promise.resolve(this.record);
@@ -66,10 +67,11 @@ class MemoryLocalDraftRepository implements LocalDraftRepository {
   }
 
   exportAccountRescue(): Promise<string> {
-    return Promise.resolve('{}');
+    return Promise.resolve(JSON.stringify({ drafts: this.record ? [this.record] : [] }));
   }
 
   clearAccount(): Promise<number> {
+    this.clearAccountCalls += 1;
     this.record = null;
     return Promise.resolve(1);
   }
@@ -85,6 +87,26 @@ class MemoryLocalDraftRepository implements LocalDraftRepository {
 function deterministicIds() {
   let counter = 1;
   return () => `00000000-0000-4000-8000-${String(counter++).padStart(12, '0')}`;
+}
+
+function installAccountExitBrowserPrimitives() {
+  class SilentBroadcastChannel {
+    addEventListener(): void {}
+    removeEventListener(): void {}
+    postMessage(): void {}
+    close(): void {}
+  }
+  vi.stubGlobal('BroadcastChannel', SilentBroadcastChannel);
+  Object.defineProperty(navigator, 'locks', {
+    configurable: true,
+    value: {
+      request: (
+        _name: string,
+        _options: unknown,
+        callback: (lock: null) => unknown,
+      ): Promise<unknown> => Promise.resolve(callback(null)),
+    },
+  });
 }
 
 function sectionByKind<K extends ContentSection['kind']>(document: ResumeDocumentV1, kind: K) {
@@ -136,6 +158,8 @@ function createFixture() {
 
 afterEach(() => {
   cleanup();
+  Reflect.deleteProperty(navigator, 'locks');
+  vi.unstubAllGlobals();
 });
 
 describe('editor workspace module management', () => {
@@ -512,6 +536,40 @@ describe('editor workspace module management', () => {
     expect(save).toHaveBeenCalledTimes(1);
     expect(store.getState().isDirty).toBe(true);
     expect(screen.queryByText('已保存', { exact: true })).toBeNull();
+  });
+
+  it('keeps the account draft and reports an incomplete exit when sign-out is offline', async () => {
+    installAccountExitBrowserPrimitives();
+    const user = userEvent.setup();
+    const { resume, store } = createFixture();
+    const repository = new MemoryLocalDraftRepository();
+    const userId = randomUUID();
+    const scope = { userId, resumeId: resume.id, tabId: randomUUID() };
+    const fetchMock = vi.fn(() => Promise.reject(new TypeError('offline')));
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <EditorWorkspace
+        accountUserId={userId}
+        canSignOut
+        initialResume={resume}
+        localDraft={{ repository, scope, initialRecord: null }}
+        saveTransport={{ save: vi.fn() }}
+        store={store}
+      />,
+    );
+    await waitFor(() => {
+      expect(repository.record).not.toBeNull();
+    });
+
+    await user.click(screen.getByRole('button', { name: '退出' }));
+
+    expect(await screen.findByRole('heading', { name: '尚未完成退出' })).toBeInstanceOf(
+      HTMLElement,
+    );
+    expect(screen.getByText(/草稿仍被保留/u)).toBeInstanceOf(HTMLElement);
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/sign-out', expect.any(Object));
+    expect(repository.clearAccountCalls).toBe(0);
+    expect(repository.record).not.toBeNull();
   });
 
   it('shows a three-way conflict overlay and explicitly rebases the full local snapshot', async () => {

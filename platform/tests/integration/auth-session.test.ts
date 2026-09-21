@@ -624,6 +624,18 @@ describe('Better Auth real PostgreSQL handler and sessions', () => {
     const readA = new GetResumeForEditor(providerA, transactions);
     const readB = new GetResumeForEditor(providerB, transactions);
     const saveA = new SaveResumeDocument(providerA, transactions);
+    const beforeB = await migrationPool.query<{
+      contentHash: string;
+      revision: string;
+      versions: number;
+    }>(
+      `select r.revision::text,
+              (select count(*)::int from ${qualified('resume_versions')} v where v.resume_id = r.id) as versions,
+              (select v.content_hash from ${qualified('resume_versions')} v
+                where v.resume_id = r.id order by v.revision desc limit 1) as "contentHash"
+         from ${qualified('resumes')} r where r.id = $1`,
+      [resumeB],
+    );
     const ownRead = await respondWithResume(
       new Request(`${baseURL}/api/v1/resumes/${resumeA}`, {
         headers: { Cookie: cookieA },
@@ -701,13 +713,19 @@ describe('Better Auth real PostgreSQL handler and sessions', () => {
     );
     await expect(bypassRlsRead.execute(resumeB)).rejects.toThrow('资源不存在');
 
-    const unchanged = await migrationPool.query<{ revision: string; versions: number }>(
+    const unchanged = await migrationPool.query<{
+      contentHash: string;
+      revision: string;
+      versions: number;
+    }>(
       `select r.revision::text,
-              (select count(*)::int from ${qualified('resume_versions')} v where v.resume_id = r.id) as versions
+              (select count(*)::int from ${qualified('resume_versions')} v where v.resume_id = r.id) as versions,
+              (select v.content_hash from ${qualified('resume_versions')} v
+                where v.resume_id = r.id order by v.revision desc limit 1) as "contentHash"
          from ${qualified('resumes')} r where r.id = $1`,
       [resumeB],
     );
-    expect(unchanged.rows).toEqual([{ revision: '1', versions: 1 }]);
+    expect(unchanged.rows).toEqual(beforeB.rows);
 
     await migrationPool.query(
       `update ${qualified('users')} set status = 'disabled' where id = $1`,
