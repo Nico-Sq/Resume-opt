@@ -7,7 +7,7 @@ export {
   type StringListField,
   type TextBlockListField,
 } from './commands';
-export { createInitialResumeDocument, type IdFactory } from './default';
+export { createInitialResumeDocument, type IdFactory, type ResumeStage } from './default';
 export { migrateResumeDocument, SchemaVersionUnsupportedError } from './migration';
 export {
   ContactSchema,

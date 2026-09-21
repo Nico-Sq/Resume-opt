@@ -5,6 +5,12 @@ export {
   type ResumeEditorDto,
 } from './resume/get-resume-for-editor';
 export {
+  CreateResume,
+  InvalidCreateResumeRequestError,
+  type CreateResumeInput,
+  type CreateResumeOutput,
+} from './resume/create-resume';
+export {
   IdempotencyKeyReusedError,
   IdempotencyRequestInProgressError,
   InvalidSaveRequestError,
@@ -17,6 +23,10 @@ export {
 } from './resume/save-resume-document';
 export type {
   AuthenticatedSession,
+  CreateResumeCommand,
+  CreateResumeMode,
+  CreateResumeReceipt,
+  CreateResumeResult,
   CurrentIdentity,
   IdentityProvider,
   PersistedResume,

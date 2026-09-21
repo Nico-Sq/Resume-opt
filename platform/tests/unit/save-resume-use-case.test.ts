@@ -35,6 +35,7 @@ describe('SaveResumeDocument', () => {
         observedUsers.push(currentUserId);
         return work({
           resumes: {
+            create: () => Promise.reject(new Error('本测试不调用创建')),
             findActiveById: () => Promise.resolve(null),
             saveDocument,
           },

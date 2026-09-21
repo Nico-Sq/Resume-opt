@@ -1,9 +1,11 @@
 import { ResumeDocumentV1Schema, type ResumeDocumentV1 } from './schema';
 
 export type IdFactory = () => string;
+export type ResumeStage = ResumeDocumentV1['stage'];
 
 export function createInitialResumeDocument(
   idFactory: IdFactory = () => crypto.randomUUID(),
+  stage: ResumeStage = 'student',
 ): ResumeDocumentV1 {
   const sections = [
     {
@@ -43,14 +45,32 @@ export function createInitialResumeDocument(
       id: idFactory(),
       kind: 'summary',
       title: '职业概要',
-      visible: false,
+      visible: stage !== 'student',
       entries: [{ id: idFactory(), blocks: [] }],
     },
     { id: idFactory(), kind: 'education', title: '教育背景', visible: true, entries: [] },
-    { id: idFactory(), kind: 'work', title: '工作经历', visible: false, entries: [] },
+    {
+      id: idFactory(),
+      kind: 'work',
+      title: '工作经历',
+      visible: stage !== 'student',
+      entries: [],
+    },
     { id: idFactory(), kind: 'project', title: '项目经历', visible: true, entries: [] },
-    { id: idFactory(), kind: 'internship', title: '实习经历', visible: true, entries: [] },
-    { id: idFactory(), kind: 'campus', title: '校园经历', visible: true, entries: [] },
+    {
+      id: idFactory(),
+      kind: 'internship',
+      title: '实习经历',
+      visible: stage === 'student',
+      entries: [],
+    },
+    {
+      id: idFactory(),
+      kind: 'campus',
+      title: '校园经历',
+      visible: stage === 'student',
+      entries: [],
+    },
     {
       id: idFactory(),
       kind: 'skillsCertificates',
@@ -58,7 +78,13 @@ export function createInitialResumeDocument(
       visible: true,
       entries: [],
     },
-    { id: idFactory(), kind: 'awards', title: '奖项荣誉', visible: true, entries: [] },
+    {
+      id: idFactory(),
+      kind: 'awards',
+      title: '奖项荣誉',
+      visible: stage !== 'employed',
+      entries: [],
+    },
     {
       id: idFactory(),
       kind: 'selfEvaluation',
@@ -74,7 +100,7 @@ export function createInitialResumeDocument(
   return ResumeDocumentV1Schema.parse({
     schemaVersion: 1,
     locale: 'zh-CN',
-    stage: 'student',
+    stage,
     sectionsById,
     moduleOrder: sections.map((sectionValue) => sectionValue.id),
     templateId: 'ats-basic',

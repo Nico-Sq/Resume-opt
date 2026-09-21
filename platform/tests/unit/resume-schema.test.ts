@@ -49,6 +49,39 @@ describe('ResumeDocumentV1', () => {
     );
   });
 
+  it('keeps every initial stage empty while changing only its default module visibility', () => {
+    const student = createInitialResumeDocument(deterministicIds(), 'student');
+    const employed = createInitialResumeDocument(deterministicIds(), 'employed');
+    const transition = createInitialResumeDocument(deterministicIds(), 'transition');
+    const visible = (document: ResumeDocumentV1, kind: string) =>
+      Object.values(document.sectionsById).find((sectionValue) => sectionValue.kind === kind)
+        ?.visible;
+
+    expect([student, employed, transition].map((document) => document.stage)).toEqual([
+      'student',
+      'employed',
+      'transition',
+    ]);
+    expect([
+      visible(student, 'work'),
+      visible(employed, 'work'),
+      visible(transition, 'work'),
+    ]).toEqual([false, true, true]);
+    expect([
+      visible(student, 'internship'),
+      visible(employed, 'internship'),
+      visible(transition, 'internship'),
+    ]).toEqual([true, false, false]);
+    for (const document of [student, employed, transition]) {
+      expect(JSON.stringify(document)).not.toMatch(/张三|示例大学|示例公司/u);
+      for (const sectionValue of Object.values(document.sectionsById)) {
+        if (!['basic', 'intent', 'summary', 'selfEvaluation'].includes(sectionValue.kind)) {
+          expect(sectionValue.entries).toEqual([]);
+        }
+      }
+    }
+  });
+
   it('accepts a hidden custom module without deleting its content', () => {
     const document = createDocument();
     const id = '00000000-0000-4000-8000-000000000099';

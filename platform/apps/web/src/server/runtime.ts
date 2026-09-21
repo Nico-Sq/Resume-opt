@@ -1,4 +1,4 @@
-import { GetResumeForEditor, SaveResumeDocument } from '@resume/application';
+import { CreateResume, GetResumeForEditor, SaveResumeDocument } from '@resume/application';
 import { parseServerRuntimeConfig } from '@resume/config/server';
 import { FixedIdentityProvider } from '@resume/infrastructure/fixed-identity';
 import {
@@ -94,6 +94,13 @@ export function getResumeForEditorUseCase(requestHeaders: Headers) {
 
 export function getSaveResumeDocumentUseCase(requestHeaders: Headers) {
   return new SaveResumeDocument(
+    getRequestIdentityProvider(requestHeaders),
+    new PostgresUserTransactionManager(getApplicationPool()),
+  );
+}
+
+export function getCreateResumeUseCase(requestHeaders: Headers) {
+  return new CreateResume(
     getRequestIdentityProvider(requestHeaders),
     new PostgresUserTransactionManager(getApplicationPool()),
   );

@@ -53,6 +53,30 @@ export interface SaveResumeCommand {
   traceId: string;
 }
 
+export type CreateResumeMode = 'blank' | 'basic-template';
+
+export interface CreateResumeCommand {
+  resumeId: string;
+  idempotencyKey: string;
+  title: string;
+  stage: ResumeDocumentV1['stage'];
+  mode: CreateResumeMode;
+  document: ResumeDocumentV1;
+  traceId: string;
+}
+
+export interface CreateResumeReceipt {
+  resumeId: string;
+  revision: string;
+  versionId: string;
+}
+
+export interface CreateResumeResult {
+  resume: PersistedResume;
+  receipt: CreateResumeReceipt;
+  replayed: boolean;
+}
+
 export interface SaveReceipt {
   resumeId: string;
   revision: string;
@@ -68,6 +92,7 @@ export interface SaveResumeResult {
 }
 
 export interface ResumeWriter {
+  create(command: CreateResumeCommand): Promise<CreateResumeResult>;
   saveDocument(command: SaveResumeCommand): Promise<SaveResumeResult>;
 }
 

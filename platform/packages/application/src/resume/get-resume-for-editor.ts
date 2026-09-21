@@ -1,6 +1,6 @@
 import { migrateResumeDocument, type ResumeDocumentV1 } from '@resume/domain/resume';
 
-import type { IdentityProvider, UserTransactionManager } from '../ports';
+import type { IdentityProvider, PersistedResume, UserTransactionManager } from '../ports';
 
 export class ResourceNotFoundError extends Error {
   readonly code = 'RESOURCE_NOT_FOUND';
@@ -31,6 +31,25 @@ export interface ResumeEditorDto {
   updatedAt: string;
 }
 
+export function toResumeEditorDto(persisted: PersistedResume): ResumeEditorDto {
+  let document: ResumeDocumentV1;
+  try {
+    document = migrateResumeDocument(persisted.document);
+  } catch (cause) {
+    throw new StoredResumeInvalidError({ cause });
+  }
+  return {
+    id: persisted.id,
+    title: persisted.title,
+    document,
+    revision: persisted.revision.toString(),
+    schemaVersion: 1,
+    templateId: persisted.templateId,
+    templateVersion: persisted.templateVersion,
+    updatedAt: persisted.updatedAt.toISOString(),
+  };
+}
+
 export class GetResumeForEditor {
   constructor(
     private readonly identityProvider: IdentityProvider,
@@ -43,23 +62,7 @@ export class GetResumeForEditor {
       const persisted = await transaction.resumes.findActiveById(resumeId);
       if (!persisted) throw new ResourceNotFoundError();
 
-      let document: ResumeDocumentV1;
-      try {
-        document = migrateResumeDocument(persisted.document);
-      } catch (cause) {
-        throw new StoredResumeInvalidError({ cause });
-      }
-
-      return {
-        id: persisted.id,
-        title: persisted.title,
-        document,
-        revision: persisted.revision.toString(),
-        schemaVersion: 1,
-        templateId: persisted.templateId,
-        templateVersion: persisted.templateVersion,
-        updatedAt: persisted.updatedAt.toISOString(),
-      };
+      return toResumeEditorDto(persisted);
     });
   }
 }
