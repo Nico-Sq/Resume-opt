@@ -891,6 +891,7 @@ button:focus-visible {
   padding: 8px 0;
   font-size: 15px;
   font-weight: 600;
+  text-decoration: none;
 }
 .topbarDivider {
   width: 1px;

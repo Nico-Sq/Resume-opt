@@ -102,6 +102,7 @@ describe('HttpSaveTransport', () => {
 
   it.each([
     [401, 'auth'],
+    [404, 'resource-gone'],
     [412, 'conflict'],
     [422, 'validation'],
     [500, 'retryable'],

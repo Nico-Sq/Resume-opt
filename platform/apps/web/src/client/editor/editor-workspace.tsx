@@ -27,6 +27,7 @@ import {
 } from 'react';
 
 import { AccountExitBarrier } from '../account/account-exit-barrier';
+import { subscribeToResumeDeleted } from '../resume-lifecycle-channel';
 import {
   createResumeEditorStore,
   ResumeEditorStoreProvider,
@@ -292,6 +293,7 @@ export function EditorWorkspace({
   const saveCoordinatorRef = useRef<SaveCoordinator | null>(null);
   const accountBarrierRef = useRef<AccountExitBarrier | null>(null);
   const accountLockedRef = useRef(false);
+  const resourceUnavailableRef = useRef(false);
   const [accountLocked, setAccountLocked] = useState(false);
   const [accountExit, setAccountExit] = useState<AccountExitState>({ status: 'idle' });
   const [resolvedConflictTransport] = useState(
@@ -340,6 +342,7 @@ export function EditorWorkspace({
         onStatus: setCloudSaveStatus,
       });
       saveCoordinatorRef.current = saveCoordinator;
+      if (resourceUnavailableRef.current) saveCoordinator.markResourceUnavailable();
       saveCoordinator.start();
     });
     const flushOnPageHide = () => {
@@ -363,6 +366,15 @@ export function EditorWorkspace({
     saveTransport,
     store,
   ]);
+
+  useEffect(() => {
+    if (!accountUserId) return;
+    return subscribeToResumeDeleted(accountUserId, initialResume.id, () => {
+      resourceUnavailableRef.current = true;
+      void localDraftControllerRef.current?.flush();
+      saveCoordinatorRef.current?.markResourceUnavailable();
+    });
+  }, [accountUserId, initialResume.id]);
 
   useEffect(() => {
     if (!accountUserId || !localDraft) return;
@@ -973,7 +985,9 @@ function EditorWorkspaceContent({
       case 'retry-wait':
         return '正在重新保存…';
       case 'failed':
-        return '保存失败';
+        return cloudSaveStatus.kind === 'resource-gone'
+          ? '简历已删除 · 已暂停自动保存'
+          : '保存失败';
       case 'conflict':
         return '版本冲突 · 已暂停自动保存';
       case 'auth-paused':
@@ -993,7 +1007,9 @@ function EditorWorkspaceContent({
   })();
   const canRetry =
     cloudSaveStatus?.phase === 'retry-wait' ||
-    (cloudSaveStatus?.phase === 'failed' && cloudSaveStatus.canRetry);
+    (cloudSaveStatus?.phase === 'failed' &&
+      cloudSaveStatus.kind !== 'resource-gone' &&
+      cloudSaveStatus.canRetry);
 
   return (
     <main
@@ -1007,10 +1023,10 @@ function EditorWorkspaceContent({
     >
       <header className={styles.topbar}>
         <div className={styles.topbarStart}>
-          <button className={styles.backButton} title="返回工作台" type="button">
+          <a className={styles.backButton} href="/resumes" title="返回工作台">
             <EditorIcon name="arrow-left" size={20} />
             <span>返回工作台</span>
-          </button>
+          </a>
           <span aria-hidden="true" className={styles.topbarDivider} />
           <button
             className={styles.titleButton}
@@ -1766,7 +1782,33 @@ function EditorWorkspaceContent({
           </div>
         </section>
       ) : null}
+      {cloudSaveStatus?.phase === 'failed' && cloudSaveStatus.kind === 'resource-gone' ? (
+        <section
+          aria-label="简历删除通知"
+          className={styles.saveNotice}
+          data-phase="resource-gone"
+          role="alert"
+        >
+          <span aria-hidden="true" className={styles.saveNoticeIcon}>
+            !
+          </span>
+          <div>
+            <strong>简历已删除或不可用</strong>
+            <p>此标签页已停止上传。本地修改不会自动恢复或覆盖服务器；请先导出救援副本。</p>
+            <div>
+              <button onClick={onExportRescue} type="button">
+                导出救援副本
+              </button>
+              <a href="/resumes/trash">前往最近删除</a>
+              <button onClick={() => void onRetrySave()} type="button">
+                恢复后重新检查
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
       {(cloudSaveStatus?.phase === 'failed' || cloudSaveStatus?.phase === 'retry-wait') &&
+      !(cloudSaveStatus.phase === 'failed' && cloudSaveStatus.kind === 'resource-gone') &&
       dismissedSavePhase !== cloudSaveStatus.phase ? (
         <section
           aria-label="保存状态通知"

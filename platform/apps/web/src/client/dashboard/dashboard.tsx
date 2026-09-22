@@ -17,6 +17,7 @@ import {
   hasUnsyncedLocalChanges,
   type LocalDraftRecord,
 } from '../editor/persistence';
+import { publishResumeDeleted } from '../resume-lifecycle-channel';
 import styles from './dashboard.module.css';
 
 const StageSchema = z.enum(['student', 'employed', 'transition']);
@@ -40,7 +41,7 @@ const CsrfResponseSchema = z.object({ data: z.object({ csrfToken: z.string().min
 
 type ResumeMeta = z.infer<typeof ResumeMetaSchema>;
 type Stage = z.infer<typeof StageSchema>;
-type IconName = 'arrow' | 'briefcase' | 'copy' | 'document' | 'edit' | 'plus' | 'trash';
+export type IconName = 'arrow' | 'briefcase' | 'copy' | 'document' | 'edit' | 'plus' | 'trash';
 
 interface PrivatePageProps {
   userId: string;
@@ -58,7 +59,7 @@ const stageLabels: Record<Stage, string> = {
   transition: '待业',
 };
 
-function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
+export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, ReactNode> = {
     arrow: <path d="m9 18 6-6-6-6m6 6H3" />,
     briefcase: <path d="M9 6V4h6v2m-11 4h16v9H4zm0 0V7h16v3m-9 3h2" />,
@@ -77,12 +78,14 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   );
 }
 
-function AppHeader({
+export function AppHeader({
   displayName,
   accountActions,
+  active = 'resumes',
 }: {
   displayName: string;
   accountActions?: ReactNode;
+  active?: 'resumes' | 'trash';
 }) {
   return (
     <header className={styles.header}>
@@ -91,8 +94,11 @@ function AppHeader({
         <span>简历工作台</span>
       </Link>
       <nav aria-label="主导航" className={styles.nav}>
-        <Link aria-current="page" href="/resumes">
+        <Link aria-current={active === 'resumes' ? 'page' : undefined} href="/resumes">
           我的简历
+        </Link>
+        <Link aria-current={active === 'trash' ? 'page' : undefined} href="/resumes/trash">
+          最近删除
         </Link>
       </nav>
       <div className={styles.account}>
@@ -356,6 +362,7 @@ export function ResumeDashboard({ userId, displayName, csrfRequired }: PrivatePa
       });
       if (!response.ok) throw new Error(visibleError(response, '删除失败，原卡片已保留。'));
       setItems((current) => current.filter((item) => item.id !== deleteTarget.id));
+      publishResumeDeleted(userId, deleteTarget.id);
       retryKeys.current.delete(`delete:${deleteTarget.id}:${deleteTarget.revision}:`);
       setDeleteTarget(null);
       queueMicrotask(() => createButtonRef.current?.focus());

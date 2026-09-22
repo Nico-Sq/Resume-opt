@@ -45,7 +45,11 @@
   text-decoration: none;
 }
 
-.nav a::after {
+.nav a:not([aria-current='page']) {
+  color: #9b9da2;
+}
+
+.nav a[aria-current='page']::after {
   position: absolute;
   right: 18px;
   bottom: 0;
@@ -266,7 +270,9 @@
   text-decoration: none;
 }
 
-.resumeInfo > a {
+.resumeInfo > a,
+.resumeInfo > strong {
+  display: block;
   color: #f6f6f6;
   font-size: 21px;
   font-weight: 700;
@@ -279,6 +285,11 @@
   gap: 8px;
   margin: 12px 0 8px;
   color: #b6b8bc;
+}
+
+.resumeInfo small {
+  display: block;
+  margin-top: 4px;
 }
 
 .cardActions {
@@ -369,6 +380,19 @@
 .inlineError {
   margin: 14px 0;
   color: #ffaaa3;
+}
+
+.inlineMessage {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid #3b3d42;
+  border-radius: 5px;
+  background: #131517;
+  color: #d4d4d6;
+}
+
+.expiredText {
+  color: #d88b8b !important;
 }
 
 .dialog {

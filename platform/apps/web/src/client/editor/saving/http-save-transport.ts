@@ -25,7 +25,14 @@ const SaveErrorSchema = z.object({
 });
 
 export type SaveFailureKind =
-  'network' | 'retryable' | 'conflict' | 'auth' | 'validation' | 'fatal' | 'aborted';
+  | 'network'
+  | 'retryable'
+  | 'conflict'
+  | 'auth'
+  | 'resource-gone'
+  | 'validation'
+  | 'fatal'
+  | 'aborted';
 
 export type SaveReceipt = z.infer<typeof SaveReceiptSchema>;
 
@@ -75,6 +82,7 @@ function classifyHttpFailure(
   };
   const message = body?.message ?? '保存服务返回了无法识别的错误';
   if (status === 401 || status === 403) return new SaveTransportError('auth', message, options);
+  if (status === 404) return new SaveTransportError('resource-gone', message, options);
   if (status === 412) {
     const currentRevision = body?.details?.currentRevision;
     return new SaveTransportError('conflict', message, {

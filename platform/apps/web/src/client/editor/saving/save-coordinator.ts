@@ -105,6 +105,8 @@ export class SaveCoordinator {
       },
     );
 
+    if (this.#terminalPhase) return;
+
     const pending = this.options.persistence.getPendingEnvelope();
     if (pending) {
       this.options.onStatus({ phase: 'dirty' });
@@ -261,7 +263,7 @@ export class SaveCoordinator {
       error instanceof SaveTransportError
         ? error
         : new SaveTransportError('network', '无法连接保存服务', { cause: error });
-    if (failure.kind === 'aborted' && this.#disposed) return;
+    if (failure.kind === 'aborted' && (this.#disposed || this.#terminalPhase)) return;
     if (failure.kind === 'network' || failure.kind === 'retryable') {
       if (this.#retryCount < this.#maxAutomaticRetries) {
         this.#retryCount += 1;
@@ -309,6 +311,17 @@ export class SaveCoordinator {
       });
       return;
     }
+    if (failure.kind === 'resource-gone') {
+      this.#terminalPhase = 'failed';
+      this.options.onStatus({
+        phase: 'failed',
+        kind: failure.kind,
+        message: failure.message,
+        canRetry: true,
+        ...(failure.options.traceId ? { traceId: failure.options.traceId } : {}),
+      });
+      return;
+    }
     if (failure.kind === 'validation') {
       void this.options.persistence.discardPending(envelope.idempotencyKey);
       this.#terminalPhase = 'validation-error';
@@ -350,6 +363,22 @@ export class SaveCoordinator {
     this.#validationFailedSeq = null;
     this.#retryCount = 0;
     await this.#requestSave();
+  }
+
+  markResourceUnavailable(): void {
+    if (this.#disposed) return;
+    if (this.#debounceTimer) clearTimeout(this.#debounceTimer);
+    if (this.#retryTimer) clearTimeout(this.#retryTimer);
+    this.#debounceTimer = null;
+    this.#retryTimer = null;
+    this.#terminalPhase = 'failed';
+    this.#abortController?.abort();
+    this.options.onStatus({
+      phase: 'failed',
+      kind: 'resource-gone',
+      message: '简历已删除或不可用',
+      canRetry: true,
+    });
   }
 
   getConflictContext(): LocalDraftConflictContext | null {

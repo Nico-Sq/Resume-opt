@@ -335,6 +335,76 @@ describe('SaveCoordinator', () => {
     coordinator.dispose();
   });
 
+  it('stops after resource deletion and only replays the frozen envelope on manual retry', async () => {
+    const document = createInitialResumeDocument();
+    const sectionId = editableSectionId(document);
+    const store = createResumeEditorStore({ document, revision: '1' });
+    const persistence = new MemorySavePersistence(store);
+    const transport = new ControlledTransport();
+    const statuses: SaveCoordinatorStatus[] = [];
+    const coordinator = new SaveCoordinator({
+      resumeId: randomUUID(),
+      store,
+      persistence,
+      transport,
+      debounceMs: 0,
+      onStatus: (status) => statuses.push(status),
+    });
+    coordinator.start();
+    store.getState().dispatch({ type: 'set-section-title', sectionId, title: '删除前未同步修改' });
+    await vi.advanceTimersByTimeAsync(0);
+    const deleted = transport.calls[0];
+    if (!deleted) throw new Error('缺少删除前保存请求');
+    deleted.result.reject(
+      new SaveTransportError('resource-gone', '简历不存在或无权访问', { status: 404 }),
+    );
+    await settle();
+
+    expect(statuses.at(-1)).toMatchObject({
+      phase: 'failed',
+      kind: 'resource-gone',
+      canRetry: true,
+    });
+    expect(persistence.pending).toEqual(deleted.envelope);
+    store.getState().dispatch({ type: 'set-section-title', sectionId, title: '删除后的本地修改' });
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(transport.calls).toHaveLength(1);
+
+    const resumed = coordinator.retryNow();
+    await settle();
+    const replayed = transport.calls[1];
+    if (!replayed) throw new Error('缺少恢复后的手动重放');
+    expect(replayed.envelope).toEqual(deleted.envelope);
+    replayed.result.reject(
+      new SaveTransportError('conflict', '版本冲突', { status: 412, currentRevision: '3' }),
+    );
+    await resumed;
+    expect(statuses.at(-1)).toMatchObject({ phase: 'conflict', currentRevision: '3' });
+    expect(store.getState().document.sectionsById[sectionId]?.title).toBe('删除后的本地修改');
+    coordinator.dispose();
+  });
+
+  it('can enter the resource-deleted terminal state before startup without uploading', () => {
+    const document = createInitialResumeDocument();
+    const store = createResumeEditorStore({ document, revision: '1' });
+    const persistence = new MemorySavePersistence(store);
+    const transport = new ControlledTransport();
+    const statuses: SaveCoordinatorStatus[] = [];
+    const coordinator = new SaveCoordinator({
+      resumeId: randomUUID(),
+      store,
+      persistence,
+      transport,
+      onStatus: (status) => statuses.push(status),
+    });
+
+    coordinator.markResourceUnavailable();
+    coordinator.start();
+    expect(statuses.at(-1)).toMatchObject({ phase: 'failed', kind: 'resource-gone' });
+    expect(transport.calls).toHaveLength(0);
+    coordinator.dispose();
+  });
+
   it('waits before an automatic retry and does not let flush create a parallel request', async () => {
     const document = createInitialResumeDocument();
     const sectionId = editableSectionId(document);

@@ -92,6 +92,9 @@ export class HttpRenameTransport implements RenameTransport {
       if (response.status === 401 || response.status === 403) {
         throw new SaveTransportError('auth', message, options);
       }
+      if (response.status === 404) {
+        throw new SaveTransportError('resource-gone', message, options);
+      }
       if (response.status === 412) {
         const currentRevision = body?.details?.currentRevision;
         throw new SaveTransportError('conflict', message, {
