@@ -22,3 +22,7 @@ export {
 } from './identity/better-auth-contract';
 export { PostgresUserTransactionManager } from './resume/postgres-user-transactions';
 export { seedFixedResume, type FixedResumeSeed } from './resume/seed-fixed-resume';
+export {
+  PostgresExpiredResumeCleaner,
+  type ExpiredResumeCleanupReport,
+} from './privacy/postgres-expired-resume-cleaner';

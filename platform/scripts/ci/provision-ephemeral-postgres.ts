@@ -8,6 +8,7 @@ const ciRoles = [
   'resume_opt_app',
   'resume_opt_auth',
   'resume_opt_migrator',
+  'resume_opt_privacy',
   'resume_opt_test',
 ] as const;
 const ciDatabases = ['resume_opt_dev', 'resume_opt_test'] as const;
@@ -58,6 +59,8 @@ async function configureDatabase(
         throw new Error('开发库必须由 resume_opt_migrator 配置');
       }
       await pool.query('GRANT USAGE ON SCHEMA public TO resume_opt_app, resume_opt_auth');
+    } else {
+      await pool.query('GRANT USAGE ON SCHEMA public TO resume_opt_privacy');
     }
   } finally {
     await pool.end();
@@ -125,6 +128,9 @@ export async function provisionEphemeralPostgres(): Promise<{ serverVersion: str
       "CREATE ROLE resume_opt_test LOGIN PASSWORD 'ci-test-password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION",
     );
     await admin.query(
+      "CREATE ROLE resume_opt_privacy LOGIN PASSWORD 'ci-privacy-password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION",
+    );
+    await admin.query(
       "CREATE DATABASE resume_opt_dev OWNER resume_opt_migrator ENCODING 'UTF8' TEMPLATE template0",
     );
     await admin.query(
@@ -136,6 +142,7 @@ export async function provisionEphemeralPostgres(): Promise<{ serverVersion: str
       'GRANT CONNECT ON DATABASE resume_opt_dev TO resume_opt_app, resume_opt_auth, resume_opt_migrator',
     );
     await admin.query('GRANT CONNECT ON DATABASE resume_opt_test TO resume_opt_test');
+    await admin.query('GRANT CONNECT ON DATABASE resume_opt_test TO resume_opt_privacy');
   } catch (error) {
     throw new Error(
       `CI 临时数据库初始化中止，实例可能已部分创建；Runner 应直接销毁，不得在该实例重试。原因：${String(error)}`,

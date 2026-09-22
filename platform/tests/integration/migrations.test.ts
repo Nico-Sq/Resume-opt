@@ -59,6 +59,7 @@ describe('initial database migration', () => {
       '0004_active_business_rls.up.sql',
       '0005_resume_list_index.up.sql',
       '0006_resume_lifecycle.up.sql',
+      '0007_expired_resume_cleanup.up.sql',
     ]);
     expect(secondRun.alreadyApplied).toEqual([
       '0001_initial.up.sql',
@@ -67,6 +68,7 @@ describe('initial database migration', () => {
       '0004_active_business_rls.up.sql',
       '0005_resume_list_index.up.sql',
       '0006_resume_lifecycle.up.sql',
+      '0007_expired_resume_cleanup.up.sql',
     ]);
   });
 
@@ -202,12 +204,13 @@ describe('initial database migration', () => {
     }>(
       `select rolname, rolsuper, rolbypassrls
          from pg_catalog.pg_roles
-        where rolname in ('resume_opt_app', 'resume_opt_auth')
+        where rolname in ('resume_opt_app', 'resume_opt_auth', 'resume_opt_privacy')
         order by rolname`,
     );
     expect(roles.rows).toEqual([
       { rolname: 'resume_opt_app', rolsuper: false, rolbypassrls: false },
       { rolname: 'resume_opt_auth', rolsuper: false, rolbypassrls: false },
+      { rolname: 'resume_opt_privacy', rolsuper: false, rolbypassrls: false },
     ]);
 
     const owners = await migrationPool.query<{ tableowner: string }>(
@@ -216,6 +219,7 @@ describe('initial database migration', () => {
     );
     expect(owners.rows.map((row) => row.tableowner)).not.toContain('resume_opt_app');
     expect(owners.rows.map((row) => row.tableowner)).not.toContain('resume_opt_auth');
+    expect(owners.rows.map((row) => row.tableowner)).not.toContain('resume_opt_privacy');
 
     const appClient = await applicationPool.connect();
     const authClient = await authPool.connect();

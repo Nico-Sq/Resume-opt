@@ -227,6 +227,8 @@ export const deletionEvents = pgTable(
     restoreUntil: timestamp('restore_until', { withTimezone: true }),
     policyVersion: integer('policy_version').notNull().default(1),
     traceId: uuid('trace_id').notNull(),
+    manifestExportId: uuid('manifest_export_id'),
+    manifestExportedAt: timestamp('manifest_exported_at', { withTimezone: true }),
   },
   (table) => [
     unique('deletion_events_resume_revision_unique').on(table.resumeId, table.revision),
@@ -235,9 +237,16 @@ export const deletionEvents = pgTable(
       table.occurredAt.desc(),
       table.id.desc(),
     ),
-    check('deletion_events_type_check', sql`${table.eventType} in ('soft_delete', 'restore')`),
+    check(
+      'deletion_events_type_check',
+      sql`${table.eventType} in ('soft_delete', 'restore', 'hard_delete')`,
+    ),
     check('deletion_events_revision_check', sql`${table.revision} >= 1`),
     check('deletion_events_policy_version_check', sql`${table.policyVersion} = 1`),
+    check(
+      'deletion_events_manifest_pair_check',
+      sql`(${table.manifestExportId} is null and ${table.manifestExportedAt} is null) or (${table.manifestExportId} is not null and ${table.manifestExportedAt} is not null)`,
+    ),
   ],
 );
 
@@ -252,10 +261,23 @@ export const idempotencyRequests = pgTable(
     responseBody: jsonb('response_body'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    resourceType: text('resource_type'),
+    resourceId: uuid('resource_id'),
   },
   (table) => [
     primaryKey({ columns: [table.userId, table.operation, table.key] }),
     check('idempotency_status_check', sql`${table.status} in ('processing', 'completed')`),
+    check(
+      'idempotency_resource_pair_check',
+      sql`(${table.resourceType} is null and ${table.resourceId} is null) or (${table.resourceType} = 'resume' and ${table.resourceId} is not null)`,
+    ),
+    check(
+      'idempotency_resume_resource_check',
+      sql`${table.operation} not like 'resume.%' or (${table.resourceType} = 'resume' and ${table.resourceId} is not null)`,
+    ),
+    index('idempotency_resource_idx')
+      .on(table.resourceType, table.resourceId)
+      .where(sql`${table.resourceId} is not null`),
   ],
 );
 

@@ -67,6 +67,9 @@ describe('server runtime configuration', () => {
       '缺少 PG_MIGRATION_URL',
     );
     expect(() => parseDatabaseToolConfig({ APP_ENV: 'test' }, 'test')).toThrow('缺少 PG_TEST_URL');
+    expect(() => parseDatabaseToolConfig({ APP_ENV: 'test' }, 'privacy')).toThrow(
+      '缺少 PG_PRIVACY_URL',
+    );
   });
 
   it('keeps runtime credentials separate from migration and test tools', () => {
@@ -74,10 +77,12 @@ describe('server runtime configuration', () => {
       ...fixedInput,
       PG_MIGRATION_URL: 'postgresql://migrator:secret@db.local/resume_opt_dev',
       PG_TEST_URL: 'postgresql://test:secret@db.local/resume_opt_test',
+      PG_PRIVACY_URL: 'postgresql://privacy:secret@db.local/resume_opt_test',
     });
 
     expect(config).not.toHaveProperty('PG_MIGRATION_URL');
     expect(config).not.toHaveProperty('PG_TEST_URL');
+    expect(config).not.toHaveProperty('PG_PRIVACY_URL');
   });
 
   it('rejects mismatched or shared business and auth database roles', () => {
@@ -144,6 +149,28 @@ describe('server runtime configuration', () => {
         'test',
       ),
     ).toThrow('测试连接必须指向 resume_opt_test');
+  });
+
+  it('keeps privacy cleanup on its isolated test role until deletion export is verified', () => {
+    const connectionString = 'postgresql://resume_opt_privacy:secret@db.local:5432/resume_opt_test';
+    expect(
+      parseDatabaseToolConfig({ APP_ENV: 'test', PG_PRIVACY_URL: connectionString }, 'privacy'),
+    ).toEqual({ appEnvironment: 'test', connectionString });
+    expect(() =>
+      parseDatabaseToolConfig(
+        { APP_ENV: 'production', PG_PRIVACY_URL: connectionString },
+        'privacy',
+      ),
+    ).toThrow('只允许 APP_ENV=test');
+    expect(() =>
+      parseDatabaseToolConfig(
+        {
+          APP_ENV: 'test',
+          PG_PRIVACY_URL: 'postgresql://resume_opt_test:secret@db.local/resume_opt_test',
+        },
+        'privacy',
+      ),
+    ).toThrow('必须使用 resume_opt_privacy');
   });
 
   it('does not include a failing connection URL or password in configuration errors', () => {

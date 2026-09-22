@@ -226,11 +226,12 @@ class PostgresResumeRepository implements ResumeRepository {
     });
     const claimed = await this.client.query(
       `insert into idempotency_requests
-        (user_id, operation, key, request_hash, status, expires_at)
-       values ($1, 'resume.rename', $2, $3, 'processing', clock_timestamp() + interval '7 days')
+        (user_id, operation, key, request_hash, status, expires_at, resource_type, resource_id)
+       values ($1, 'resume.rename', $2, $3, 'processing', clock_timestamp() + interval '7 days',
+               'resume', $4)
        on conflict do nothing
        returning key`,
-      [this.userId, command.idempotencyKey, requestHash],
+      [this.userId, command.idempotencyKey, requestHash, command.resumeId],
     );
     if (!claimed.rowCount) {
       const existing = await this.client.query<{
@@ -372,11 +373,12 @@ class PostgresResumeRepository implements ResumeRepository {
     });
     const claimed = await this.client.query(
       `insert into idempotency_requests
-        (user_id, operation, key, request_hash, status, expires_at)
-       values ($1, 'resume.copy', $2, $3, 'processing', clock_timestamp() + interval '7 days')
+        (user_id, operation, key, request_hash, status, expires_at, resource_type, resource_id)
+       values ($1, 'resume.copy', $2, $3, 'processing', clock_timestamp() + interval '7 days',
+               'resume', $4)
        on conflict do nothing
        returning key`,
-      [this.userId, command.idempotencyKey, requestHash],
+      [this.userId, command.idempotencyKey, requestHash, command.targetResumeId],
     );
     if (!claimed.rowCount) {
       const existing = await this.client.query<{
@@ -491,11 +493,12 @@ class PostgresResumeRepository implements ResumeRepository {
     });
     const claimed = await this.client.query(
       `insert into idempotency_requests
-        (user_id, operation, key, request_hash, status, expires_at)
-       values ($1, 'resume.create', $2, $3, 'processing', clock_timestamp() + interval '7 days')
+        (user_id, operation, key, request_hash, status, expires_at, resource_type, resource_id)
+       values ($1, 'resume.create', $2, $3, 'processing', clock_timestamp() + interval '7 days',
+               'resume', $4)
        on conflict do nothing
        returning key`,
-      [this.userId, command.idempotencyKey, requestHash],
+      [this.userId, command.idempotencyKey, requestHash, command.resumeId],
     );
     if (!claimed.rowCount) {
       const existing = await this.client.query<{
@@ -602,11 +605,12 @@ class PostgresResumeRepository implements ResumeRepository {
     });
     const claimed = await this.client.query(
       `insert into idempotency_requests
-        (user_id, operation, key, request_hash, status, expires_at)
-       values ($1, 'resume.save', $2, $3, 'processing', clock_timestamp() + interval '7 days')
+        (user_id, operation, key, request_hash, status, expires_at, resource_type, resource_id)
+       values ($1, 'resume.save', $2, $3, 'processing', clock_timestamp() + interval '7 days',
+               'resume', $4)
        on conflict do nothing
        returning key`,
-      [this.userId, command.idempotencyKey, requestHash],
+      [this.userId, command.idempotencyKey, requestHash, command.resumeId],
     );
 
     if (!claimed.rowCount) {

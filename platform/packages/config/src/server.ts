@@ -113,7 +113,7 @@ export const ServerRuntimeConfigSchema = z
   });
 
 export type ServerRuntimeConfig = z.infer<typeof ServerRuntimeConfigSchema>;
-export type DatabaseToolTarget = 'migration' | 'test';
+export type DatabaseToolTarget = 'migration' | 'privacy' | 'test';
 
 export interface DatabaseToolConfig {
   appEnvironment: z.infer<typeof AppEnvironmentSchema>;
@@ -123,6 +123,7 @@ export interface DatabaseToolConfig {
 const DatabaseToolEnvironmentSchema = z.object({
   APP_ENV: AppEnvironmentSchema.default('local'),
   PG_MIGRATION_URL: PostgreSqlUrlSchema.optional(),
+  PG_PRIVACY_URL: PostgreSqlUrlSchema.optional(),
   PG_TEST_URL: PostgreSqlUrlSchema.optional(),
 });
 
@@ -137,11 +138,25 @@ export function parseDatabaseToolConfig(
   target: DatabaseToolTarget,
 ): DatabaseToolConfig {
   const environment = DatabaseToolEnvironmentSchema.parse(input);
-  const key = target === 'migration' ? 'PG_MIGRATION_URL' : 'PG_TEST_URL';
+  const key =
+    target === 'migration'
+      ? 'PG_MIGRATION_URL'
+      : target === 'privacy'
+        ? 'PG_PRIVACY_URL'
+        : 'PG_TEST_URL';
   const connectionString = environment[key];
   if (!connectionString) throw new Error(`缺少 ${key}`);
 
   const database = new URL(connectionString).pathname.slice(1);
+  if (target === 'privacy') {
+    const url = new URL(connectionString);
+    if (environment.APP_ENV !== 'test') {
+      throw new Error('独立删除清单通道验收前，隐私清理只允许 APP_ENV=test');
+    }
+    if (database !== 'resume_opt_test' || url.username !== 'resume_opt_privacy') {
+      throw new Error('隐私清理连接必须使用 resume_opt_privacy 角色并指向 resume_opt_test');
+    }
+  }
   if (target === 'test' && database !== 'resume_opt_test') {
     throw new Error('测试连接必须指向 resume_opt_test');
   }

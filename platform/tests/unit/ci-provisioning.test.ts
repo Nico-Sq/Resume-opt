@@ -42,6 +42,7 @@ describe('CI ephemeral PostgreSQL safety gate', () => {
       'resume_opt_app',
       'resume_opt_auth',
       'resume_opt_migrator',
+      'resume_opt_privacy',
       'resume_opt_test',
     ]);
     expect(serialized).not.toContain('password');
