@@ -83,6 +83,25 @@ export function getRequestSessionProvider(requestHeaders: Headers) {
   );
 }
 
+export async function getPrivatePageIdentity(requestHeaders: Headers) {
+  const config = getServerRuntimeConfig();
+  if (config.AUTH_MODE === 'fixed') {
+    if (!config.DEV_FIXED_USER_ID) throw new Error('固定身份未配置');
+    return {
+      userId: config.DEV_FIXED_USER_ID,
+      displayName: '开发用户',
+      csrfRequired: false,
+    };
+  }
+  const session = await getRequestSessionProvider(requestHeaders).getSession();
+  if (!session?.emailVerified) return null;
+  return {
+    userId: session.userId,
+    displayName: session.displayName,
+    csrfRequired: true,
+  };
+}
+
 function getRequestIdentityProvider(requestHeaders: Headers): IdentityProvider {
   const config = getServerRuntimeConfig();
   if (config.AUTH_MODE === 'better-auth') return getRequestSessionProvider(requestHeaders);

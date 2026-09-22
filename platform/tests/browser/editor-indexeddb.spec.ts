@@ -146,10 +146,7 @@ async function updateNameAndMeasure(nameInput: Locator, name: string): Promise<B
 }
 
 test('动态编辑路由支持两份本人简历、刷新和后退且私有响应不缓存', async ({ page }) => {
-  await page.goto('/');
-  await expect(page).toHaveURL(new RegExp(`/resumes/${FIXED_RESUME_ID}/edit$`, 'u'));
-  await expect(page.getByText('张三的简历', { exact: true })).toBeVisible();
-
+  await page.goto(`/resumes/${FIXED_RESUME_ID}/edit`);
   const firstApi = await page.request.get(`/api/v1/resumes/${FIXED_RESUME_ID}`);
   expect(firstApi.status()).toBe(200);
   expect(firstApi.headers()['cache-control']).toContain('no-store');
@@ -157,6 +154,8 @@ test('动态编辑路由支持两份本人简历、刷新和后退且私有响�
     data: { id: string; title: string; revision: string };
     traceId: string;
   };
+  const originalTitle = secondPayload.data.title;
+  await expect(page.getByText(originalTitle, { exact: true })).toBeVisible();
   secondPayload.data.id = SECOND_RESUME_ID;
   secondPayload.data.title = '第二份测试简历';
   await page.route(`**/api/v1/resumes/${SECOND_RESUME_ID}`, async (route) => {
@@ -174,7 +173,7 @@ test('动态编辑路由支持两份本人简历、刷新和后退且私有响�
   await expect(page.getByText('第二份测试简历', { exact: true })).toBeVisible();
 
   await page.goBack();
-  await expect(page.getByText('张三的简历', { exact: true })).toBeVisible();
+  await expect(page.getByText(originalTitle, { exact: true })).toBeVisible();
   await page.goForward();
   await expect(page.getByText('第二份测试简历', { exact: true })).toBeVisible();
 
@@ -186,7 +185,7 @@ test('动态编辑路由支持两份本人简历、刷新和后退且私有响�
 });
 
 test('重命名与正文共用 revision，刷新回读不改变正文', async ({ page }) => {
-  await page.goto('/');
+  await page.goto(`/resumes/${FIXED_RESUME_ID}/edit`);
   const beforeResponse = await page.request.get(`/api/v1/resumes/${FIXED_RESUME_ID}`);
   expect(beforeResponse.status()).toBe(200);
   const before = (await beforeResponse.json()) as {
@@ -226,7 +225,7 @@ test('重命名与正文共用 revision，刷新回读不改变正文', async ({
 });
 
 test('401 后保全 IndexedDB 信封并在同账户刷新后用原键恢复', async ({ page }) => {
-  await page.goto('/');
+  await page.goto(`/resumes/${FIXED_RESUME_ID}/edit`);
   const nameInput = page.getByRole('textbox', { name: '姓名', exact: true });
   await expect(nameInput).toBeVisible();
   const originalName = await nameInput.inputValue();
@@ -288,7 +287,10 @@ test('退出广播暂停多标签页且取消后保留原账户草稿，恢复�
   page,
 }) => {
   const secondPage = await context.newPage();
-  await Promise.all([page.goto('/'), secondPage.goto('/')]);
+  await Promise.all([
+    page.goto(`/resumes/${FIXED_RESUME_ID}/edit`),
+    secondPage.goto(`/resumes/${FIXED_RESUME_ID}/edit`),
+  ]);
   await Promise.all([
     expect(page.getByRole('textbox', { name: '姓名', exact: true })).toBeVisible(),
     expect(secondPage.getByRole('textbox', { name: '姓名', exact: true })).toBeVisible(),
@@ -370,7 +372,7 @@ test('滚动只归属编辑器内部且普通长页面可以滚动', async ({ pa
 
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);
-    await page.goto('/');
+    await page.goto(`/resumes/${FIXED_RESUME_ID}/edit`);
     if (viewport.width <= 800) {
       await expect(page.locator('aside[aria-label="内容编辑"]')).toBeHidden();
       await page.getByRole('button', { name: '基本信息', exact: true }).click();
@@ -478,7 +480,7 @@ test('两侧工具组在高低视口等距且保持点击目标', async ({ page 
     { width: 1280, height: 480 },
   ]) {
     await page.setViewportSize(viewport);
-    await page.goto('/');
+    await page.goto(`/resumes/${FIXED_RESUME_ID}/edit`);
     await expect(page.getByRole('textbox', { name: '姓名', exact: true })).toBeVisible();
 
     const layout = await page.evaluate((viewportValue) => {
@@ -562,7 +564,7 @@ test('两侧工具组在高低视口等距且保持点击目标', async ({ page 
 
 test('长内容增加 A4 页数且不丢字', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto('/');
+  await page.goto(`/resumes/${FIXED_RESUME_ID}/edit`);
   const summaryInput = page.getByRole('textbox', { name: '个人简介', exact: true });
   await expect(summaryInput).toBeVisible();
   const originalSummary = await summaryInput.inputValue();
@@ -670,7 +672,7 @@ test('长内容增加 A4 页数且不丢字', async ({ page }) => {
 });
 
 test('原生 Chromium 完成预览、IndexedDB、崩溃恢复与云端回读闭环', async ({ browser, page }) => {
-  await page.goto('/');
+  await page.goto(`/resumes/${FIXED_RESUME_ID}/edit`);
   const nameInput = page.getByRole('textbox', { name: '姓名', exact: true });
   await expect(nameInput).toBeVisible();
   const originalName = await nameInput.inputValue();
