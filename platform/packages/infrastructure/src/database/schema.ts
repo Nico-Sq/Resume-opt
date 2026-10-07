@@ -219,6 +219,7 @@ export const deletionEvents = pgTable(
   'deletion_events',
   {
     id: uuid('id').primaryKey(),
+    eventSequence: bigint('event_sequence', { mode: 'bigint' }).generatedAlwaysAsIdentity(),
     resumeId: uuid('resume_id'),
     userId: uuid('user_id').notNull(),
     eventType: text('event_type').notNull(),
@@ -235,6 +236,7 @@ export const deletionEvents = pgTable(
     resourceId: uuid('resource_id').generatedAlwaysAs(sql`coalesce(resume_id, user_id)`),
   },
   (table) => [
+    unique('deletion_events_event_sequence_unique').on(table.eventSequence),
     unique('deletion_events_resource_revision_unique').on(
       table.resourceType,
       table.resourceId,

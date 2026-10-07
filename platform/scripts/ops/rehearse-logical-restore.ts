@@ -7,14 +7,21 @@ import { performance } from 'node:perf_hooks';
 import { createInitialResumeDocument } from '@resume/domain/resume';
 import { runMigrations } from '@resume/infrastructure/migrations';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
+import {
+  acknowledgeDeletionManifest,
+  readDeletionManifest,
+  replayDeletionManifest,
+} from './deletion-manifest';
 
 type DatabasePool = ReturnType<typeof createPostgresPool>;
 
 const schemaPattern = /^(?:restore_(?:source|target)|native_restore)_[a-f0-9]{32}$/u;
 const tables = [
   { name: 'schema_migrations', orderBy: 'name', restore: false },
-  { name: 'templates', orderBy: 'template_id, version', restore: true },
   { name: 'users', orderBy: 'id', restore: true },
+  { name: 'auth_users', orderBy: 'id', restore: true },
+  { name: 'auth_rate_limits', orderBy: 'id', restore: true },
+  { name: 'templates', orderBy: 'template_id, version', restore: true },
   { name: 'resumes', orderBy: 'id', restore: true },
   { name: 'resume_versions', orderBy: 'id', restore: true },
   {
@@ -23,6 +30,11 @@ const tables = [
     restore: true,
   },
   { name: 'audit_events', orderBy: 'id', restore: true },
+  { name: 'deletion_events', orderBy: 'event_sequence', restore: true },
+  { name: 'privacy_requests', orderBy: 'id', restore: true },
+  { name: 'auth_sessions', orderBy: 'id', restore: true },
+  { name: 'auth_accounts', orderBy: 'id', restore: true },
+  { name: 'auth_verifications', orderBy: 'id', restore: true },
 ] as const;
 
 type TableName = (typeof tables)[number]['name'];
@@ -57,7 +69,7 @@ function deterministicIds() {
 export async function seedSyntheticBackupFixture(
   pool: DatabasePool,
   schema: string,
-): Promise<void> {
+): Promise<{ userId: string; resumeId: string }> {
   const nextId = deterministicIds();
   const userId = nextId();
   const resumeId = nextId();
@@ -65,19 +77,47 @@ export async function seedSyntheticBackupFixture(
   const operationKey = nextId();
   const auditId = nextId();
   const traceId = nextId();
+  const sessionId = nextId();
+  const accountId = nextId();
+  const verificationId = nextId();
   const document = createInitialResumeDocument(nextId);
   const contentHash = createHash('sha256').update(JSON.stringify(document)).digest('hex');
 
+  await pool.query(
+    `insert into ${qualified(schema, 'auth_users')}
+      (id, name, email, email_verified, created_at, updated_at)
+     values ($1, '恢复演练合成用户', $2, true, now(), now())`,
+    [userId, `restore-${userId}@example.test`],
+  );
+  await pool.query(
+    `insert into ${qualified(schema, 'auth_sessions')}
+      (id, expires_at, token, created_at, updated_at, user_id)
+     values ($1, now() + interval '1 day', $2, now(), now(), $3)`,
+    [sessionId, `synthetic-session-${userId}`, userId],
+  );
+  await pool.query(
+    `insert into ${qualified(schema, 'auth_accounts')}
+      (id, account_id, provider_id, user_id, password, created_at, updated_at)
+     values ($1, $2, 'credential', $3, 'synthetic-password-hash', now(), now())`,
+    [accountId, `synthetic-${userId}`, userId],
+  );
+  await pool.query(
+    `insert into ${qualified(schema, 'auth_verifications')}
+      (id, identifier, value, expires_at, created_at, updated_at)
+     values ($1, $2, $3, now() + interval '1 hour', now(), now())`,
+    [verificationId, `synthetic-${userId}`, userId],
+  );
+  await pool.query(
+    `insert into ${qualified(schema, 'auth_rate_limits')}
+      (id, key, count, last_request)
+     values ($1, $2, 1, 1)`,
+    [nextId(), `synthetic-${userId}`],
+  );
   await pool.query(
     `insert into ${qualified(schema, 'templates')}
       (template_id, version, renderer_version, manifest, asset_hash, status)
      values ('ats-basic', '1.0.0', '1.0.0', $1::jsonb, 'synthetic-fixture', 'published')`,
     [JSON.stringify({ fixture: true })],
-  );
-  await pool.query(
-    `insert into ${qualified(schema, 'users')}(id, status, display_name)
-     values ($1, 'active', '恢复演练合成用户')`,
-    [userId],
   );
   await pool.query(
     `insert into ${qualified(schema, 'resumes')}
@@ -104,6 +144,21 @@ export async function seedSyntheticBackupFixture(
       (id, actor_user_id, action, resource_type, resource_id, trace_id, result_code, metadata)
      values ($1, $2, 'resume.initialized', 'resume', $3, $4, 'ok', $5::jsonb)`,
     [auditId, userId, resumeId, traceId, JSON.stringify({ synthetic: true })],
+  );
+  return { userId, resumeId };
+}
+
+export async function appendSyntheticAccountDeletion(
+  pool: DatabasePool,
+  schema: string,
+  userId: string,
+): Promise<void> {
+  await pool.query(
+    `insert into ${qualified(schema, 'deletion_events')}
+      (id, resume_id, user_id, event_type, revision, occurred_at, restore_until,
+       policy_version, trace_id)
+     values ($1, null, $2, 'account_delete', 1, clock_timestamp(), null, 1, $3)`,
+    [randomUUID(), userId, randomUUID()],
   );
 }
 
@@ -149,11 +204,36 @@ async function restoreSnapshot(
     for (const table of tables) {
       if (!table.restore || snapshot[table.name].length === 0) continue;
       const tableName = qualified(schema, table.name);
+      if (table.name === 'auth_users') {
+        await client.query(`alter table ${tableName} disable trigger auth_users_bridge`);
+      }
+      if (table.name === 'deletion_events') {
+        await client.query(
+          `insert into ${tableName}
+             (event_sequence, id, resume_id, user_id, event_type, revision, occurred_at,
+              restore_until, policy_version, trace_id, manifest_export_id, manifest_exported_at)
+           overriding system value
+           select x.event_sequence, x.id, x.resume_id, x.user_id, x.event_type, x.revision,
+                  x.occurred_at, x.restore_until, x.policy_version, x.trace_id,
+                  x.manifest_export_id, x.manifest_exported_at
+             from jsonb_to_recordset($1::jsonb) as x(
+               event_sequence bigint, id uuid, resume_id uuid, user_id uuid, event_type text,
+               revision bigint, occurred_at timestamptz, restore_until timestamptz,
+               policy_version integer, trace_id uuid, manifest_export_id uuid,
+               manifest_exported_at timestamptz
+             )`,
+          [JSON.stringify(snapshot[table.name])],
+        );
+        continue;
+      }
       await client.query(
         `insert into ${tableName}
          select * from jsonb_populate_recordset(null::${tableName}, $1::jsonb)`,
         [JSON.stringify(snapshot[table.name])],
       );
+      if (table.name === 'auth_users') {
+        await client.query(`alter table ${tableName} enable trigger auth_users_bridge`);
+      }
     }
     await client.query('commit');
   } catch (error) {
@@ -226,15 +306,44 @@ export async function rehearseLogicalRestore(options: {
     await pool.query(`create schema ${quoteIdentifier(sourceSchema)}`);
     await pool.query(`create schema ${quoteIdentifier(targetSchema)}`);
     const sourceMigration = await runMigrations(pool, options.migrationsDirectory, sourceSchema);
-    await seedSyntheticBackupFixture(pool, sourceSchema);
+    const fixture = await seedSyntheticBackupFixture(pool, sourceSchema);
     const snapshot = await captureSnapshot(pool, sourceSchema);
     const sourceSummary = snapshotSummary(snapshot);
+    await appendSyntheticAccountDeletion(pool, sourceSchema, fixture.userId);
+    const manifest = await readDeletionManifest(pool, sourceSchema, {
+      manifestId: randomUUID(),
+      generatedAt: new Date().toISOString(),
+    });
+    await acknowledgeDeletionManifest(pool, sourceSchema, manifest);
 
     const targetMigration = await runMigrations(pool, options.migrationsDirectory, targetSchema);
     await restoreSnapshot(pool, targetSchema, snapshot);
     const restoredSnapshot = await captureSnapshot(pool, targetSchema);
     const targetSummary = snapshotSummary(restoredSnapshot);
     const verification = await verifyTarget(pool, targetSchema);
+    const replayExpected = {
+      expectedThroughSequence: manifest.throughSequence,
+      expectedPayloadSha256: manifest.payloadSha256,
+    };
+    const replay = await replayDeletionManifest(pool, targetSchema, manifest, replayExpected);
+    const replayAgain = await replayDeletionManifest(pool, targetSchema, manifest, replayExpected);
+    const replayState = await pool.query<{
+      users: number;
+      resumes: number;
+      sessions: number;
+      verifications: number;
+      deletion_events: number;
+    }>(
+      `select
+         (select count(*)::int from ${qualified(targetSchema, 'users')} where id = $1) users,
+         (select count(*)::int from ${qualified(targetSchema, 'resumes')} where user_id = $1) resumes,
+         (select count(*)::int from ${qualified(targetSchema, 'auth_sessions')}) sessions,
+         (select count(*)::int from ${qualified(targetSchema, 'auth_verifications')}) verifications,
+         (select count(*)::int from ${qualified(targetSchema, 'deletion_events')}) deletion_events`,
+      [fixture.userId],
+    );
+    const replayStateRow = replayState.rows[0];
+    if (!replayStateRow) throw new Error('删除清单重放未返回恢复库状态');
     const hashesMatch = tables.every(
       (table) => sourceSummary[table.name]?.sha256 === targetSummary[table.name]?.sha256,
     );
@@ -248,6 +357,16 @@ export async function rehearseLogicalRestore(options: {
       hashesMatch,
       expectedRlsPolicies: verification.policyCount === 6,
       uniqueConstraintEnforced: verification.duplicateRevisionRejected,
+      manifestWatermarkVerified: manifest.throughSequence !== '0',
+      accountDeletionReplayed:
+        replay.accountsDeleted === 1 && replayStateRow.users === 0 && replayStateRow.resumes === 0,
+      oldAuthenticationRevoked:
+        replay.sessionsRevoked === 1 &&
+        replay.verificationTokensRevoked === 1 &&
+        replayStateRow.sessions === 0 &&
+        replayStateRow.verifications === 0,
+      deletionReplayIdempotent:
+        replayAgain.accountsDeleted === 0 && replayStateRow.deletion_events === 1,
     };
     return {
       schemaVersion: 1,
@@ -261,12 +380,20 @@ export async function rehearseLogicalRestore(options: {
       actualRpoSeconds: null,
       source: sourceSummary,
       target: targetSummary,
+      deletionManifest: {
+        manifestId: manifest.manifestId,
+        throughSequence: manifest.throughSequence,
+        payloadSha256: manifest.payloadSha256,
+        eventCount: manifest.eventCount,
+      },
+      deletionReplay: replay,
       checks,
       passed: Object.values(checks).every(Boolean),
       limitations: [
         '仅使用合成数据和随机隔离 schema',
         '未覆盖 pg_dump/pg_restore、自定义格式归档或大对象',
         '未覆盖 WAL 连续性、PITR、真实备份加密与跨主机恢复',
+        '删除清单来自合成测试库；生产独立加密持久通道仍需外部验收',
         '不得据此宣称生产 RPO/RTO 达标',
       ],
     };

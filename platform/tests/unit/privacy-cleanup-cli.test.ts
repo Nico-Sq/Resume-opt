@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { assertManifestExportEnvironment } from '../../scripts/ops/export-deletion-manifest';
 import { parseCleanupOptions } from '../../scripts/ops/purge-expired-resumes';
 import { parseAccountCleanupOptions } from '../../scripts/ops/purge-deleted-accounts';
 
@@ -24,6 +25,20 @@ describe('expired resume cleanup CLI safety', () => {
     expect(() => parseCleanupOptions(['--environment=test', `--limit=${limit}`])).toThrow(
       '1 到 100',
     );
+  });
+});
+
+describe('deletion manifest export CLI safety', () => {
+  it('only accepts the synthetic test database environment', () => {
+    expect(() => {
+      assertManifestExportEnvironment('test');
+    }).not.toThrow();
+    expect(() => {
+      assertManifestExportEnvironment('local');
+    }).toThrow('只允许 test 环境');
+    expect(() => {
+      assertManifestExportEnvironment('production');
+    }).toThrow('只允许 test 环境');
   });
 });
 

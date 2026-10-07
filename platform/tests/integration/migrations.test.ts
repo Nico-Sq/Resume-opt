@@ -61,6 +61,7 @@ describe('initial database migration', () => {
       '0006_resume_lifecycle.up.sql',
       '0007_expired_resume_cleanup.up.sql',
       '0008_account_deletion.up.sql',
+      '0009_deletion_manifest_replay.up.sql',
     ]);
     expect(secondRun.alreadyApplied).toEqual([
       '0001_initial.up.sql',
@@ -71,6 +72,7 @@ describe('initial database migration', () => {
       '0006_resume_lifecycle.up.sql',
       '0007_expired_resume_cleanup.up.sql',
       '0008_account_deletion.up.sql',
+      '0009_deletion_manifest_replay.up.sql',
     ]);
   });
 

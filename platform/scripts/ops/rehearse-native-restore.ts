@@ -9,8 +9,14 @@ import { performance } from 'node:perf_hooks';
 
 import { runMigrations } from '@resume/infrastructure/migrations';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
+import {
+  acknowledgeDeletionManifest,
+  readDeletionManifest,
+  replayDeletionManifest,
+} from './deletion-manifest';
 
 import {
+  appendSyntheticAccountDeletion,
   captureSnapshot,
   quoteIdentifier,
   seedSyntheticBackupFixture,
@@ -165,7 +171,7 @@ export async function rehearseNativeRestore(options: {
   try {
     await pool.query(`create schema ${quoteIdentifier(schema)} authorization resume_opt_test`);
     await runMigrations(pool, options.migrationsDirectory, schema);
-    await seedSyntheticBackupFixture(pool, schema);
+    const fixture = await seedSyntheticBackupFixture(pool, schema);
     const expectedSnapshot = await captureSnapshot(pool, schema);
     const expectedSummary = snapshotSummary(expectedSnapshot);
     const expectedGrantCount = await countApplicationGrants(pool, schema);
@@ -229,6 +235,13 @@ export async function rehearseNativeRestore(options: {
       throw new Error('无法生成有效的原生归档摘要');
     }
 
+    await appendSyntheticAccountDeletion(pool, schema, fixture.userId);
+    const manifest = await readDeletionManifest(pool, schema, {
+      manifestId: randomUUID(),
+      generatedAt: new Date().toISOString(),
+    });
+    await acknowledgeDeletionManifest(pool, schema, manifest);
+
     const restoreStarted = performance.now();
     await pool.query(`drop schema ${quoteIdentifier(schema)} cascade`);
     await runTool(
@@ -242,6 +255,29 @@ export async function rehearseNativeRestore(options: {
     const restoredSummary = snapshotSummary(restoredSnapshot);
     const targetChecks = await verifyTarget(pool, schema);
     const restoredGrantCount = await countApplicationGrants(pool, schema);
+    const replayExpected = {
+      expectedThroughSequence: manifest.throughSequence,
+      expectedPayloadSha256: manifest.payloadSha256,
+    };
+    const replay = await replayDeletionManifest(pool, schema, manifest, replayExpected);
+    const replayAgain = await replayDeletionManifest(pool, schema, manifest, replayExpected);
+    const replayState = await pool.query<{
+      users: number;
+      resumes: number;
+      sessions: number;
+      verifications: number;
+      deletion_events: number;
+    }>(
+      `select
+         (select count(*)::int from ${quoteIdentifier(schema)}.users where id = $1) users,
+         (select count(*)::int from ${quoteIdentifier(schema)}.resumes where user_id = $1) resumes,
+         (select count(*)::int from ${quoteIdentifier(schema)}.auth_sessions) sessions,
+         (select count(*)::int from ${quoteIdentifier(schema)}.auth_verifications) verifications,
+         (select count(*)::int from ${quoteIdentifier(schema)}.deletion_events) deletion_events`,
+      [fixture.userId],
+    );
+    const replayStateRow = replayState.rows[0];
+    if (!replayStateRow) throw new Error('删除清单重放未返回恢复库状态');
     const actualRtoMs = performance.now() - restoreStarted;
     const summaryKeys = Object.keys(expectedSummary);
     const checks = {
@@ -252,10 +288,20 @@ export async function rehearseNativeRestore(options: {
       hashesMatch: summaryKeys.every(
         (key) => restoredSummary[key]?.sha256 === expectedSummary[key]?.sha256,
       ),
-      expectedRlsPolicies: targetChecks.policyCount === 5,
+      expectedRlsPolicies: targetChecks.policyCount === 6,
       uniqueConstraintEnforced: targetChecks.duplicateRevisionRejected,
       applicationGrantsRestored:
         expectedGrantCount > 0 && restoredGrantCount === expectedGrantCount,
+      manifestWatermarkVerified: manifest.throughSequence !== '0',
+      accountDeletionReplayed:
+        replay.accountsDeleted === 1 && replayStateRow.users === 0 && replayStateRow.resumes === 0,
+      oldAuthenticationRevoked:
+        replay.sessionsRevoked === 1 &&
+        replay.verificationTokensRevoked === 1 &&
+        replayStateRow.sessions === 0 &&
+        replayStateRow.verifications === 0,
+      deletionReplayIdempotent:
+        replayAgain.accountsDeleted === 0 && replayStateRow.deletion_events === 1,
     };
 
     return {
@@ -274,12 +320,20 @@ export async function rehearseNativeRestore(options: {
       actualRtoMs,
       expectedSummary,
       restoredSummary,
+      deletionManifest: {
+        manifestId: manifest.manifestId,
+        throughSequence: manifest.throughSequence,
+        payloadSha256: manifest.payloadSha256,
+        eventCount: manifest.eventCount,
+      },
+      deletionReplay: replay,
       checks,
       passed: Object.values(checks).every(Boolean),
       limitations: [
         '仅使用合成数据和随机隔离 schema，不包含用户真实数据',
         '验证 pg_dump/pg_restore 自定义归档，不替代 WAL 连续性或托管 PITR',
         '未覆盖备份加密、跨主机恢复、对象存储、真实生产 RPO/RTO 或故障审批',
+        '删除清单来自合成测试库；生产独立加密持久通道仍需外部验收',
       ],
     };
   } finally {

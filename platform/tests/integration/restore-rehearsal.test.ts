@@ -7,7 +7,7 @@ import { rehearseLogicalRestore } from '../../scripts/ops/rehearse-logical-resto
 const testDatabase = parseDatabaseToolConfig({ ...process.env, APP_ENV: 'test' }, 'test');
 
 describe('synthetic logical restore rehearsal', () => {
-  it('restores every V0.1 table into an isolated migrated schema and verifies invariants', async () => {
+  it('restores the isolated snapshot then replays deletion manifests before admission', async () => {
     const report = await rehearseLogicalRestore({
       connectionString: testDatabase.connectionString,
       environment: 'test',
@@ -22,6 +22,10 @@ describe('synthetic logical restore rehearsal', () => {
       hashesMatch: true,
       expectedRlsPolicies: true,
       uniqueConstraintEnforced: true,
+      manifestWatermarkVerified: true,
+      accountDeletionReplayed: true,
+      oldAuthenticationRevoked: true,
+      deletionReplayIdempotent: true,
     });
     expect(report.actualRpoSeconds).toBeNull();
     expect(report.limitations).toContain('不得据此宣称生产 RPO/RTO 达标');

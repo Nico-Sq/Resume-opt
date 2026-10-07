@@ -174,6 +174,7 @@ describe('Better Auth shared UUID migration', () => {
         '0006_resume_lifecycle.up.sql',
         '0007_expired_resume_cleanup.up.sql',
         '0008_account_deletion.up.sql',
+        '0009_deletion_manifest_replay.up.sql',
       ],
       alreadyApplied: ['0001_initial.up.sql'],
     });
