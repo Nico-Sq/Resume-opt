@@ -442,6 +442,7 @@ export function ResumeDashboard({ userId, displayName, csrfRequired }: PrivatePa
             <details className={styles.accountMenu}>
               <summary aria-label="打开账户菜单">⌄</summary>
               <div>
+                <Link href="/account">账户与数据</Link>
                 <button onClick={() => void beginExit()} type="button">
                   退出登录
                 </button>

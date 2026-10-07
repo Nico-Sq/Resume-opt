@@ -246,7 +246,7 @@ export async function rehearseLogicalRestore(options: {
       targetMigrated: targetMigration.applied.length > 0,
       rowCountsMatch,
       hashesMatch,
-      expectedRlsPolicies: verification.policyCount === 5,
+      expectedRlsPolicies: verification.policyCount === 6,
       uniqueConstraintEnforced: verification.duplicateRevisionRejected,
     };
     return {

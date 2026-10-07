@@ -1,0 +1,97 @@
+.page {
+  min-height: 100vh;
+  background: #0f1011;
+  color: #f4f4f5;
+}
+
+.main {
+  width: min(100% - 40px, 820px);
+  margin: 0 auto;
+  padding: 42px 0 80px;
+}
+
+.back {
+  color: #b7bac0;
+  text-decoration: none;
+}
+
+.panel,
+.danger {
+  margin-top: 24px;
+  padding: 28px;
+  border: 1px solid #34363a;
+  border-radius: 10px;
+  background: #17191b;
+}
+
+.panel h1,
+.danger h2 {
+  margin: 0 0 14px;
+}
+
+.panel p,
+.danger p {
+  color: #aeb1b7;
+  line-height: 1.7;
+}
+
+.danger {
+  border-color: #6f3539;
+}
+
+.danger form,
+.danger label {
+  display: grid;
+  gap: 9px;
+}
+
+.danger form {
+  gap: 20px;
+}
+
+.danger input[type='password'] {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #42454a;
+  border-radius: 6px;
+  background: #0f1011;
+  color: inherit;
+}
+
+.confirm {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.danger button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 6px;
+  background: #b63e47;
+  color: white;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.danger button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.rescue {
+  padding: 16px;
+  border: 1px solid #61582f;
+  border-radius: 6px;
+  background: #211f16;
+}
+
+.rescue button {
+  background: #e5e7eb;
+  color: #151719;
+}
+
+.message {
+  margin: 0;
+  color: #ffb1b6 !important;
+}

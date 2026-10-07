@@ -13,6 +13,7 @@ import {
   type BetterAuthServer,
 } from '@resume/infrastructure/better-auth-server';
 import { runMigrations } from '@resume/infrastructure/migrations';
+import { PostgresAccountDeletionRequests } from '@resume/infrastructure/account-deletion';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
 import { PostgresUserTransactionManager } from '@resume/infrastructure/resume-transactions';
 import { seedFixedResume } from '@resume/infrastructure/resume-seed';
@@ -565,10 +566,13 @@ describe('Better Auth real PostgreSQL handler and sessions', () => {
     expect(identityA.userId).toBe(userA.id);
     expect(identityB.userId).toBe(userB.id);
 
-    await migrationPool.query(
-      `update ${qualified('users')} set status = 'disabled' where id = $1`,
-      [userA.id],
-    );
+    const deletion = await new PostgresAccountDeletionRequests(applicationPool, schema).accept({
+      userId: userA.id,
+      idempotencyKey: randomUUID(),
+      requestHash: 'confirmed-account-delete-v1',
+      traceId: randomUUID(),
+    });
+    expect(deletion).toMatchObject({ replayed: false });
     expect(await providerA.getSession()).toBeNull();
     await expect(providerA.requireIdentity()).rejects.toThrow('需要登录');
     expect(

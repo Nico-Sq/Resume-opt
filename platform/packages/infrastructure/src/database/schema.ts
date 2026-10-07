@@ -219,7 +219,7 @@ export const deletionEvents = pgTable(
   'deletion_events',
   {
     id: uuid('id').primaryKey(),
-    resumeId: uuid('resume_id').notNull(),
+    resumeId: uuid('resume_id'),
     userId: uuid('user_id').notNull(),
     eventType: text('event_type').notNull(),
     revision: bigint('revision', { mode: 'bigint' }).notNull(),
@@ -229,9 +229,17 @@ export const deletionEvents = pgTable(
     traceId: uuid('trace_id').notNull(),
     manifestExportId: uuid('manifest_export_id'),
     manifestExportedAt: timestamp('manifest_exported_at', { withTimezone: true }),
+    resourceType: text('resource_type').generatedAlwaysAs(
+      sql`case when event_type = 'account_delete' then 'account' else 'resume' end`,
+    ),
+    resourceId: uuid('resource_id').generatedAlwaysAs(sql`coalesce(resume_id, user_id)`),
   },
   (table) => [
-    unique('deletion_events_resume_revision_unique').on(table.resumeId, table.revision),
+    unique('deletion_events_resource_revision_unique').on(
+      table.resourceType,
+      table.resourceId,
+      table.revision,
+    ),
     index('deletion_events_user_occurred_idx').on(
       table.userId,
       table.occurredAt.desc(),
@@ -239,13 +247,46 @@ export const deletionEvents = pgTable(
     ),
     check(
       'deletion_events_type_check',
-      sql`${table.eventType} in ('soft_delete', 'restore', 'hard_delete')`,
+      sql`${table.eventType} in ('soft_delete', 'restore', 'hard_delete', 'account_delete')`,
+    ),
+    check(
+      'deletion_events_resource_check',
+      sql`(${table.resourceType} = 'resume' and ${table.resumeId} is not null and ${table.resourceId} = ${table.resumeId}) or (${table.resourceType} = 'account' and ${table.resumeId} is null and ${table.resourceId} = ${table.userId})`,
     ),
     check('deletion_events_revision_check', sql`${table.revision} >= 1`),
     check('deletion_events_policy_version_check', sql`${table.policyVersion} = 1`),
     check(
       'deletion_events_manifest_pair_check',
       sql`(${table.manifestExportId} is null and ${table.manifestExportedAt} is null) or (${table.manifestExportId} is not null and ${table.manifestExportedAt} is not null)`,
+    ),
+  ],
+);
+
+export const privacyRequests = pgTable(
+  'privacy_requests',
+  {
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id').notNull(),
+    requestType: text('request_type').notNull(),
+    status: text('status').notNull(),
+    idempotencyKey: uuid('idempotency_key').notNull(),
+    requestHash: text('request_hash').notNull(),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull(),
+    cleanupDueAt: timestamp('cleanup_due_at', { withTimezone: true }).notNull(),
+    authRevokedAt: timestamp('auth_revoked_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    lastErrorCode: text('last_error_code'),
+  },
+  (table) => [
+    unique('privacy_requests_user_type_unique').on(table.userId, table.requestType),
+    index('privacy_requests_cleanup_idx')
+      .on(table.status, table.requestedAt, table.id)
+      .where(sql`${table.status} = 'accepted'`),
+    check('privacy_requests_type_check', sql`${table.requestType} = 'account_delete'`),
+    check('privacy_requests_status_check', sql`${table.status} in ('accepted', 'completed')`),
+    check(
+      'privacy_requests_completion_check',
+      sql`(${table.status} = 'accepted' and ${table.completedAt} is null) or (${table.status} = 'completed' and ${table.completedAt} is not null)`,
     ),
   ],
 );

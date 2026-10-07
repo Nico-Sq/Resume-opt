@@ -7,6 +7,8 @@ const fixedIdentity = {
   DEV_FIXED_RESUME_ID: '00000000-0000-4000-8000-000000000002',
   DEV_FIXED_VERSION_ID: '00000000-0000-4000-8000-000000000003',
 };
+const port = process.env.PLAYWRIGHT_PORT ?? '3000';
+const baseURL = `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: './tests/browser',
@@ -19,7 +21,7 @@ export default defineConfig({
   outputDir: 'artifacts/playwright',
   reporter: process.env.CI ? [['github'], ['line']] : [['line']],
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL,
     browserName: 'chromium',
     channel: process.env.PLAYWRIGHT_CHANNEL ?? 'chrome',
     headless: true,
@@ -28,9 +30,9 @@ export default defineConfig({
   },
   webServer: {
     command: 'pnpm dev',
-    url: 'http://localhost:3000',
+    url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
-    env: fixedIdentity,
+    env: { ...fixedIdentity, PORT: port },
   },
 });

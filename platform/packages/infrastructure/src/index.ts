@@ -6,6 +6,7 @@ export {
   createBetterAuthServer,
   handleBetterAuthRequest,
   InMemoryAuthMailbox,
+  type AuthoritativeAuthSession,
   type AuthMailMessage,
   type BetterAuthServer,
   type BetterAuthServerOptions,
@@ -26,3 +27,9 @@ export {
   PostgresExpiredResumeCleaner,
   type ExpiredResumeCleanupReport,
 } from './privacy/postgres-expired-resume-cleaner';
+export {
+  PostgresAccountDeletionCleaner,
+  PostgresAccountDeletionRequests,
+  type AccountDeletionCleanupReport,
+  type AccountDeletionReceipt,
+} from './privacy/postgres-account-deletion';

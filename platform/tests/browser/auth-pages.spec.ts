@@ -140,7 +140,7 @@ test('注册、验证、找回和重置在短视口保持可达', async ({ page 
   );
 });
 
-test('外站 returnTo 只能回到站内默认位置', async ({ page }) => {
+test('外站 returnTo 只能回到站内默认位置', async ({ page }, testInfo) => {
   await mockAuth(page);
   await page.goto('/login?returnTo=https%3A%2F%2Fexample.invalid%2Fsteal');
   await page.getByRole('textbox', { name: '邮箱' }).fill('user@example.cn');
@@ -148,5 +148,5 @@ test('外站 returnTo 只能回到站内默认位置', async ({ page }) => {
   await page.getByRole('button', { name: '登录' }).click();
 
   await expect(page).toHaveURL('/resumes');
-  expect(new URL(page.url()).origin).toBe('http://localhost:3000');
+  expect(new URL(page.url()).origin).toBe(new URL(String(testInfo.project.use.baseURL)).origin);
 });

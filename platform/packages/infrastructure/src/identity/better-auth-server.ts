@@ -116,6 +116,12 @@ export function createBetterAuthServer(options: BetterAuthServerOptions) {
 
 export type BetterAuthServer = ReturnType<typeof createBetterAuthServer>;
 
+export interface AuthoritativeAuthSession {
+  userId: string;
+  emailVerified: boolean;
+  createdAt: Date;
+}
+
 function isAllowedEndpoint(request: Request): boolean {
   const { pathname } = new URL(request.url);
   return BETTER_AUTH_ENDPOINTS.some(({ method, path }) => {
@@ -263,6 +269,41 @@ export class BetterAuthSessionProvider implements SessionProvider, IdentityProvi
     return createHmac('sha256', this.csrfSecret)
       .update(`resume-opt:csrf\0${result.session.token}`)
       .digest('base64url');
+  }
+
+  async getAuthoritativeSession(): Promise<AuthoritativeAuthSession | null> {
+    const result = await this.auth.api.getSession({
+      headers: this.requestHeaders,
+      query: { disableCookieCache: true, disableRefresh: true },
+    });
+    if (!result) return null;
+    return {
+      userId: result.user.id,
+      emailVerified: result.user.emailVerified,
+      createdAt: new Date(result.session.createdAt),
+    };
+  }
+
+  async verifyCurrentPassword(password: string): Promise<boolean> {
+    try {
+      const result = await this.auth.api.verifyPassword({
+        headers: this.requestHeaders,
+        body: { password },
+      });
+      return result.status;
+    } catch (error) {
+      const statusCode =
+        typeof error === 'object' && error !== null && 'statusCode' in error
+          ? Number(error.statusCode)
+          : 0;
+      if (statusCode >= 400 && statusCode < 500) return false;
+      throw error;
+    }
+  }
+
+  async revokeAllSessions(userId: string): Promise<void> {
+    const context = await this.auth.$context;
+    await context.internalAdapter.deleteUserSessions(userId);
   }
 
   async getSession(): Promise<AuthenticatedSession | null> {

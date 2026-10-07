@@ -18,6 +18,7 @@ import {
   type BetterAuthServer,
 } from '@resume/infrastructure/better-auth-server';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
+import { PostgresAccountDeletionRequests } from '@resume/infrastructure/account-deletion';
 import { PostgresUserTransactionManager } from '@resume/infrastructure/resume-transactions';
 import type { IdentityProvider } from '@resume/application';
 
@@ -39,6 +40,10 @@ export function getApplicationPool() {
     });
   }
   return applicationPool;
+}
+
+export function getAccountDeletionRequests() {
+  return new PostgresAccountDeletionRequests(getApplicationPool());
 }
 
 export function getBetterAuthServer() {

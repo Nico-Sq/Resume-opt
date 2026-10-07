@@ -108,7 +108,9 @@
   box-shadow: 0 18px 50px rgb(0 0 0 / 45%);
 }
 
-.accountMenu button {
+.accountMenu button,
+.accountMenu a {
+  display: block;
   width: 100%;
   padding: 10px 12px;
   border: 0;
@@ -117,9 +119,11 @@
   color: #f4f4f5;
   cursor: pointer;
   text-align: left;
+  text-decoration: none;
 }
 
-.accountMenu button:hover {
+.accountMenu button:hover,
+.accountMenu a:hover {
   background: #27292d;
 }
 

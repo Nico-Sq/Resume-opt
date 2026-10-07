@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CreateResumePage, ResumeDashboard } from '../../apps/web/src/client/dashboard/dashboard';
+import { AccountPage } from '../../apps/web/src/client/account/account-page';
 
 const firstResume = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -181,6 +182,26 @@ describe('create resume page', () => {
     const firstHeaders = new Headers(calls[0]?.[1]?.headers);
     const retryHeaders = new Headers(calls[1]?.[1]?.headers);
     expect(firstHeaders.get('Idempotency-Key')).toBe(retryHeaders.get('Idempotency-Key'));
+  });
+});
+
+describe('account page', () => {
+  it('requires password and an irreversible confirmation without future account features', async () => {
+    const user = userEvent.setup();
+    render(
+      <AccountPage
+        csrfRequired
+        displayName="测试用户"
+        userId="11111111-1111-4111-8111-111111111111"
+      />,
+    );
+
+    const submit = screen.getByRole<HTMLButtonElement>('button', { name: '永久注销账户' });
+    expect(submit.disabled).toBe(true);
+    await user.type(screen.getByLabelText('当前密码'), 'Strong-password-123');
+    await user.click(screen.getByRole('checkbox', { name: /我确认永久注销/u }));
+    expect(submit.disabled).toBe(false);
+    expect(document.body.textContent).not.toMatch(/会员|支付|设备管理|头像上传|邮箱修改/u);
   });
 });
 

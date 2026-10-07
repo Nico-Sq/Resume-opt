@@ -22,6 +22,15 @@ test('工作台空状态严格保留 V0.2 范围', async ({ page }, testInfo) =>
   await page.screenshot({ fullPage: true, path: testInfo.outputPath('dashboard-empty.png') });
 });
 
+test('账户页只呈现退出与注销所需的最小范围', async ({ page }, testInfo) => {
+  await page.goto('/account');
+  await expect(page.getByRole('heading', { name: '账户与数据' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '永久注销账户' })).toBeVisible();
+  await expect(page.getByText('固定开发身份不能执行账户注销。')).toBeVisible();
+  await expect(page.getByText(/会员|支付|设备管理|头像上传|邮箱修改/u)).toHaveCount(0);
+  await page.screenshot({ fullPage: true, path: testInfo.outputPath('account-minimal.png') });
+});
+
 test('创建、最近编辑、复制、重命名和删除形成最小闭环', async ({ page }, testInfo) => {
   const suffix = String(Date.now());
   const title = `工作台验收-${suffix}`;

@@ -60,6 +60,7 @@ describe('initial database migration', () => {
       '0005_resume_list_index.up.sql',
       '0006_resume_lifecycle.up.sql',
       '0007_expired_resume_cleanup.up.sql',
+      '0008_account_deletion.up.sql',
     ]);
     expect(secondRun.alreadyApplied).toEqual([
       '0001_initial.up.sql',
@@ -69,6 +70,7 @@ describe('initial database migration', () => {
       '0005_resume_list_index.up.sql',
       '0006_resume_lifecycle.up.sql',
       '0007_expired_resume_cleanup.up.sql',
+      '0008_account_deletion.up.sql',
     ]);
   });
 
@@ -86,6 +88,7 @@ describe('initial database migration', () => {
       'auth_verifications',
       'deletion_events',
       'idempotency_requests',
+      'privacy_requests',
       'resume_versions',
       'resumes',
       'schema_migrations',

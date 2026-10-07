@@ -25,6 +25,7 @@
     "ops:restore:rehearse": "node --env-file=.env.local --import tsx scripts/ops/rehearse-logical-restore.ts --environment=test",
     "ops:restore:native": "node --env-file=.env.local --import tsx scripts/ops/rehearse-native-restore.ts --environment=test",
     "ops:privacy:purge-expired": "node --env-file=.env.local --import tsx scripts/ops/purge-expired-resumes.ts --environment=test",
+    "ops:privacy:purge-accounts": "node --env-file=.env.local --import tsx scripts/ops/purge-deleted-accounts.ts --environment=test",
     "test:migrations": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run tests/integration/migrations.test.ts",
     "test:unit": "vitest run --dir tests/unit",
     "test:integration": "node --env-file=.env.local ./node_modules/vitest/vitest.mjs run --dir tests/integration",

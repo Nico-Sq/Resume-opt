@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import {
+  AuthenticationRequiredError,
   IdempotencyKeyReusedError,
   IdempotencyRequestInProgressError,
   ResourceNotFoundError,
@@ -761,6 +762,11 @@ export class PostgresUserTransactionManager implements UserTransactionManager {
       await client.query('begin');
       await client.query(`set local search_path to "${this.#schema}", public`);
       await client.query("select set_config('app.user_id', $1, true)", [userId]);
+      const activeUser = await client.query<{ active: boolean }>(
+        "select status = 'active' and deleted_at is null as active from users where id = $1 for key share",
+        [userId],
+      );
+      if (activeUser.rows[0]?.active === false) throw new AuthenticationRequiredError();
       const result = await work({ resumes: new PostgresResumeRepository(client, userId) });
       await client.query('commit');
       return result;
