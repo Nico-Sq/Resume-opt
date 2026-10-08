@@ -91,6 +91,7 @@ describe('resume dashboard', () => {
 
     await user.click(screen.getByRole('button', { name: '复制' }));
     expect(await screen.findByText(secondResume.title)).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('已复制');
 
     const originalCard = document.querySelector(`[data-resume-id="${firstResume.id}"]`);
     expect(originalCard).toBeTruthy();
@@ -100,6 +101,7 @@ describe('resume dashboard', () => {
     await user.type(title, '高级前端工程师');
     await user.click(screen.getByRole('button', { name: '保存名称' }));
     expect(await screen.findByText('高级前端工程师')).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('已重命名');
 
     const renamedCard = document.querySelector(`[data-resume-id="${firstResume.id}"]`);
     await user.click(withinElement(renamedCard).getByRole('button', { name: '删除' }));
@@ -108,6 +110,8 @@ describe('resume dashboard', () => {
     await waitFor(() => {
       expect(screen.queryByText('高级前端工程师')).toBeNull();
     });
+    expect(screen.getByRole('link', { name: '新建简历' })).toBe(document.activeElement);
+    expect(screen.getByRole('status').textContent).toContain('已移到最近删除');
 
     expect(fetchMock.mock.calls[3]?.[1]).toMatchObject({ method: 'PATCH' });
     expect(fetchMock.mock.calls[4]?.[1]).toMatchObject({ method: 'DELETE' });

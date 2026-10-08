@@ -185,6 +185,7 @@ export function ResumeDashboard({ userId, displayName, csrfRequired }: PrivatePa
   const [renameTitle, setRenameTitle] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<ResumeMeta | null>(null);
   const [actionMessage, setActionMessage] = useState('');
+  const [actionNotice, setActionNotice] = useState('');
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [exitState, setExitState] = useState<
     | { phase: 'idle' }
@@ -195,6 +196,7 @@ export function ResumeDashboard({ userId, displayName, csrfRequired }: PrivatePa
   const csrfTokenRef = useRef<string | undefined>(undefined);
   const retryKeys = useRef(new Map<string, string>());
   const createButtonRef = useRef<HTMLAnchorElement>(null);
+  const focusAfterDeleteRef = useRef(false);
   const exitBarrierRef = useRef<AccountExitBarrier | null>(null);
   const draftRepositoryRef = useRef<DexieLocalDraftRepository | null>(null);
 
@@ -228,6 +230,13 @@ export function ResumeDashboard({ userId, displayName, csrfRequired }: PrivatePa
   useEffect(() => {
     reload();
   }, [reload]);
+
+  useEffect(() => {
+    if (!deleteTarget && focusAfterDeleteRef.current) {
+      focusAfterDeleteRef.current = false;
+      createButtonRef.current?.focus();
+    }
+  }, [deleteTarget]);
 
   useEffect(() => {
     if (!csrfRequired) return;
@@ -304,6 +313,7 @@ export function ResumeDashboard({ userId, displayName, csrfRequired }: PrivatePa
     const key = keyFor('rename', renameTarget, title);
     setBusyAction(`rename:${renameTarget.id}`);
     setActionMessage('');
+    setActionNotice('');
     try {
       const response = await fetch(`/api/v1/resumes/${renameTarget.id}`, {
         method: 'PATCH',
@@ -315,6 +325,7 @@ export function ResumeDashboard({ userId, displayName, csrfRequired }: PrivatePa
       const updated = RenameResponseSchema.parse(await response.json()).data.resume;
       setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       retryKeys.current.delete(`rename:${renameTarget.id}:${renameTarget.revision}:${title}`);
+      setActionNotice(`简历已重命名为“${updated.title}”。`);
       setRenameTarget(null);
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : '重命名失败，原卡片已保留。');
@@ -328,6 +339,7 @@ export function ResumeDashboard({ userId, displayName, csrfRequired }: PrivatePa
     const key = keyFor('copy', item, title);
     setBusyAction(`copy:${item.id}`);
     setActionMessage('');
+    setActionNotice('');
     try {
       const response = await fetch(`/api/v1/resumes/${item.id}/copies`, {
         method: 'POST',
@@ -341,6 +353,7 @@ export function ResumeDashboard({ userId, displayName, csrfRequired }: PrivatePa
       setItems(page.items);
       setNextCursor(page.nextCursor);
       retryKeys.current.delete(`copy:${item.id}:${item.revision}:${title}`);
+      setActionNotice(`“${item.title}”已复制。`);
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : '复制失败，原卡片已保留。');
     } finally {
@@ -353,6 +366,7 @@ export function ResumeDashboard({ userId, displayName, csrfRequired }: PrivatePa
     const key = keyFor('delete', deleteTarget);
     setBusyAction(`delete:${deleteTarget.id}`);
     setActionMessage('');
+    setActionNotice('');
     try {
       const response = await fetch(`/api/v1/resumes/${deleteTarget.id}`, {
         method: 'DELETE',
@@ -364,8 +378,9 @@ export function ResumeDashboard({ userId, displayName, csrfRequired }: PrivatePa
       setItems((current) => current.filter((item) => item.id !== deleteTarget.id));
       publishResumeDeleted(userId, deleteTarget.id);
       retryKeys.current.delete(`delete:${deleteTarget.id}:${deleteTarget.revision}:`);
+      setActionNotice(`“${deleteTarget.title}”已移到最近删除。`);
+      focusAfterDeleteRef.current = true;
       setDeleteTarget(null);
-      queueMicrotask(() => createButtonRef.current?.focus());
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : '删除失败，原卡片已保留。');
     } finally {
@@ -465,6 +480,12 @@ export function ResumeDashboard({ userId, displayName, csrfRequired }: PrivatePa
             新建简历
           </Link>
         </div>
+
+        {actionNotice && !renameTarget && !deleteTarget ? (
+          <p aria-live="polite" className={styles.inlineMessage} role="status">
+            {actionNotice}
+          </p>
+        ) : null}
 
         {phase === 'loading' ? (
           <section aria-busy="true" aria-label="正在加载简历" className={styles.skeletonList}>
