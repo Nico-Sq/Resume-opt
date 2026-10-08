@@ -7,11 +7,12 @@ const fixedIdentity = {
   DEV_FIXED_RESUME_ID: '00000000-0000-4000-8000-000000000002',
   DEV_FIXED_VERSION_ID: '00000000-0000-4000-8000-000000000003',
 };
-const port = process.env.PLAYWRIGHT_PORT ?? '3000';
+const port = process.env.PLAYWRIGHT_PORT ?? '3200';
 const baseURL = `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: './tests/browser',
+  testIgnore: 'real-auth.spec.ts',
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
@@ -31,7 +32,7 @@ export default defineConfig({
   webServer: {
     command: 'pnpm dev',
     url: baseURL,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
     env: { ...fixedIdentity, PORT: port },
   },

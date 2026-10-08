@@ -49,6 +49,7 @@ describe('GitHub verification workflow', () => {
     expect(workflow).toContain('${{ job.services.postgres.id }}');
     expect(workflow).toContain('pnpm db:seed:dev');
     expect(workflow).toContain('pnpm test:browser');
+    expect(workflow).toContain('Verify fixed and real-auth native Chrome matrices');
     expect(workflow).toContain('PLAYWRIGHT_CHANNEL: chrome');
   });
 
