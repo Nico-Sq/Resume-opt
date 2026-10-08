@@ -8,6 +8,7 @@ import {
   request as apiRequest,
   test,
   type BrowserContext,
+  type Locator,
   type Page,
   type Route,
 } from '@playwright/test';
@@ -123,6 +124,16 @@ async function login(context: BrowserContext, account: TestAccount, clientIp: st
   await expect(page).toHaveURL(`${baseURL}/resumes`);
   await expect(page.getByRole('heading', { name: '我的简历' })).toBeVisible();
   return page;
+}
+
+async function tabTo(page: Page, target: Locator, limit = 160) {
+  for (let index = 0; index < limit; index += 1) {
+    if (await target.evaluate((element) => element === document.activeElement).catch(() => false)) {
+      return;
+    }
+    await page.keyboard.press('Tab');
+  }
+  throw new Error(`Tab ${String(limit)} 次后仍未到达目标`);
 }
 
 async function signOut(page: Page) {
@@ -705,6 +716,132 @@ test.describe.serial('V0.2 双真实账户 Chrome 矩阵', () => {
     } finally {
       releaseResponse();
       if (replacement) await stopServer(replacement);
+      await context.close();
+    }
+  });
+
+  test('真实账户用纯键盘完成登录、创建、保存、复制、删除恢复和退出', async ({ browser }) => {
+    browserVersion = browser.version();
+    const context = await browser.newContext();
+    clientIps.add('198.51.100.204');
+    await context.setExtraHTTPHeaders({ 'X-Resume-Client-Ip': '198.51.100.204' });
+    const page = await context.newPage();
+    try {
+      await page.goto('/login?returnTo=%2Fresumes');
+      const email = page.getByRole('textbox', { name: '邮箱' });
+      await tabTo(page, email);
+      await page.keyboard.insertText(accountA.email);
+      const passwordInput = page.getByLabel('密码');
+      await tabTo(page, passwordInput);
+      await page.keyboard.insertText(password);
+      const loginButton = page.getByRole('button', { name: '登录' });
+      await tabTo(page, loginButton);
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL('/resumes');
+
+      const newResume = page.getByRole('link', { name: '新建简历' });
+      await tabTo(page, newResume);
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL('/resumes/new');
+      const title = `纯键盘验收-${String(Date.now())}`;
+      const titleInput = page.getByRole('textbox', { name: '简历名称' });
+      await tabTo(page, titleInput);
+      await page.keyboard.press('Control+A');
+      await page.keyboard.insertText(title);
+      const blankMode = page.getByRole('radio', { name: /空白创建/u });
+      const template = page.getByRole('radio', { name: /基础模板/u });
+      await tabTo(page, blankMode);
+      await page.keyboard.press('ArrowDown');
+      await expect(template).toBeChecked();
+      const createButton = page.getByRole('button', { name: '创建并进入编辑器' });
+      await tabTo(page, createButton);
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(/\/resumes\/[0-9a-f-]+\/edit$/u);
+
+      const nameInput = page.getByRole('textbox', { name: '姓名', exact: true });
+      await tabTo(page, nameInput);
+      await page.keyboard.press('Control+A');
+      await page.keyboard.insertText('纯键盘用户');
+      await page.keyboard.press('Tab');
+      await expect(page.getByText('已保存', { exact: true })).toBeVisible();
+
+      const backToDashboard = page.getByRole('link', { name: '返回工作台' });
+      await tabTo(page, backToDashboard);
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL('/resumes');
+      const card = page
+        .locator('article')
+        .filter({ has: page.getByRole('link', { exact: true, name: title }) });
+      const copyButton = card.getByRole('button', { name: '复制' });
+      await tabTo(page, copyButton);
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('link', { exact: true, name: `${title} 副本` })).toBeVisible();
+      await expect(page.getByRole('status')).toContainText('已复制');
+
+      const deleteButton = card.getByRole('button', { name: '删除' });
+      await tabTo(page, deleteButton);
+      await page.keyboard.press('Enter');
+      const confirmDelete = page
+        .getByRole('dialog', { name: `删除“${title}”？` })
+        .getByRole('button', { name: '确认删除' });
+      await tabTo(page, confirmDelete);
+      await page.keyboard.press('Enter');
+      await expect(card).toHaveCount(0);
+      await expect(newResume).toBeFocused();
+      await expect(page.getByRole('status')).toContainText('已移到最近删除');
+
+      const trashLink = page.getByRole('link', { name: '最近删除' });
+      await tabTo(page, trashLink);
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL('/resumes/trash');
+      const trashCard = page.locator('article').filter({ hasText: title });
+      const restoreButton = trashCard.getByRole('button', { name: '恢复' });
+      await tabTo(page, restoreButton);
+      await page.keyboard.press('Enter');
+      await expect(page.getByText(`“${title}”已恢复到我的简历。`)).toBeVisible();
+      await expect(
+        page.getByRole('heading', { exact: true, level: 1, name: '最近删除' }),
+      ).toBeFocused();
+
+      const resumesLink = page.getByRole('link', { exact: true, name: '我的简历' });
+      await tabTo(page, resumesLink);
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL('/resumes');
+      const accountMenu = page.locator('summary[aria-label="打开账户菜单"]');
+      await tabTo(page, accountMenu);
+      await page.keyboard.press('Enter');
+      const logout = page.getByRole('button', { name: '退出登录' });
+      await tabTo(page, logout);
+      await page.keyboard.press('Enter');
+      await expect(page).toHaveURL(/\/login$/u);
+
+      const evidenceDirectory = resolve('artifacts/ci/accessibility');
+      await mkdir(evidenceDirectory, { recursive: true });
+      await writeFile(
+        resolve(evidenceDirectory, 'keyboard-real-auth.json'),
+        `${JSON.stringify(
+          {
+            schemaVersion: 1,
+            scope: 'V02-029-keyboard',
+            runtime: {
+              browser: {
+                channel: process.env.PLAYWRIGHT_CHANNEL ?? 'chrome',
+                version: browserVersion,
+              },
+              authMode: 'better-auth',
+              database: 'PostgreSQL',
+            },
+            flow: ['login', 'create', 'save', 'copy', 'delete', 'restore', 'logout'],
+            input: ['Tab', 'Enter', 'Space', 'Control+A', 'keyboard text'],
+            mouseActions: 0,
+            passed: true,
+          },
+          null,
+          2,
+        )}\n`,
+        'utf8',
+      );
+    } finally {
       await context.close();
     }
   });
