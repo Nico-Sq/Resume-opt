@@ -71,11 +71,31 @@ describe('recently deleted resumes', () => {
     await waitFor(() => {
       expect(screen.queryByText(activeItem.title)).toBeNull();
     });
+    expect(screen.getByRole('status').textContent).toContain('已恢复到我的简历');
 
     const calls = fetchMock.mock.calls as Array<[RequestInfo | URL, RequestInit?]>;
     const firstHeaders = new Headers(calls[1]?.[1]?.headers);
     const retryHeaders = new Headers(calls[2]?.[1]?.headers);
     expect(firstHeaders.get('Idempotency-Key')).toBe(retryHeaders.get('Idempotency-Key'));
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: '最近删除' }));
+  });
+
+  it('keeps the success feedback visible after restoring the final item', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json({ data: { items: [activeItem], nextCursor: null } }))
+        .mockResolvedValueOnce(
+          Response.json({ data: { resume: { id: activeItem.id, revision: '5' } } }),
+        ),
+    );
+    const user = userEvent.setup();
+
+    render(<TrashPage csrfRequired={false} displayName="开发用户" userId="dev-user" />);
+    await user.click(await screen.findByRole('button', { name: '恢复' }));
+
+    expect(await screen.findByRole('heading', { name: '最近删除为空' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('已恢复到我的简历');
   });
 });

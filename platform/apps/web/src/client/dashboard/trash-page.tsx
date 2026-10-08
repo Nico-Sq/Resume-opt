@@ -210,6 +210,11 @@ export function TrashPage({
             </button>
           </section>
         ) : null}
+        {phase === 'ready' && message ? (
+          <p aria-live="polite" className={styles.inlineMessage} role="status">
+            {message}
+          </p>
+        ) : null}
         {phase === 'ready' && items.length === 0 ? (
           <section className={styles.statePanel}>
             <Icon name="trash" size={64} />
@@ -226,11 +231,6 @@ export function TrashPage({
               <h2 id="trash-list-title">可恢复的简历</h2>
               <span>{items.length} 份</span>
             </div>
-            {message ? (
-              <p aria-live="polite" className={styles.inlineMessage} role="status">
-                {message}
-              </p>
-            ) : null}
             <div className={styles.resumeList}>
               {items.map((item) => {
                 const expired = new Date(item.restoreUntil).getTime() <= referenceTime;
