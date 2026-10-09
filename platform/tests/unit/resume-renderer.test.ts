@@ -117,6 +117,20 @@ describe('resume renderer projector', () => {
     });
   });
 
+  it('includes every populated job-intent field in the preview headline', () => {
+    const { document } = createFixture();
+    const intent = sectionByKind(document, 'intent').entries[0];
+    if (!intent) throw new Error('fixture 缺少求职意向条目');
+    intent.targetRole = '产品工程师';
+    intent.industries = ['互联网', '人工智能'];
+    intent.cities = ['上海'];
+    intent.employmentType = '全职';
+
+    expect(createResumeRenderModel(rendererInput(document)).headline).toBe(
+      '产品工程师 · 互联网 · 人工智能 · 上海 · 全职',
+    );
+  });
+
   it('rejects template, font and avatar configuration mismatches', () => {
     const { document } = createFixture();
     expect(() =>
@@ -341,7 +355,11 @@ describe('A4 metrics, styles and external preview scale', () => {
       '--resume-body-size': '10.5pt',
       '--resume-margin-top': '14mm',
       '--resume-heading-color': '#171717',
+      '--resume-divider-width': '.35mm',
     });
+
+    model.design.divider = false;
+    expect(createRendererCssVariables(model)['--resume-divider-width']).toBe('0mm');
   });
 
   it('renders measurable A4 page DOM without executing user HTML or leaking internal IDs', () => {

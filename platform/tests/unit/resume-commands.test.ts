@@ -315,6 +315,7 @@ describe('resume edit commands', () => {
     );
     const originalEntry = sectionByKind(withEntry, 'project').entries[0];
     if (!originalEntry) throw new Error('fixture 缺少项目条目');
+    originalEntry.name = 'AI 简历平台';
 
     const copied = applyResumeEditCommand(
       withEntry,
@@ -324,7 +325,8 @@ describe('resume edit commands', () => {
     const [first, second] = sectionByKind(copied, 'project').entries;
     if (!first || !second) throw new Error('复制结果缺少条目');
 
-    expect(withoutIds(second)).toEqual(withoutIds(first));
+    expect(second.name).toBe('AI 简历平台 副本');
+    expect(withoutIds({ ...second, name: first.name })).toEqual(withoutIds(first));
     const firstIds = new Set(collectIds(first));
     expect(collectIds(second).every((id) => !firstIds.has(id))).toBe(true);
   });
@@ -407,7 +409,9 @@ describe('resume edit commands', () => {
     const custom = sectionByKind(added, 'custom');
 
     expect(added.moduleOrder[2]).toBe(custom.id);
-    expect(custom).toMatchObject({ title: '开源贡献', visible: true, entries: [] });
+    expect(custom).toMatchObject({ title: '开源贡献', visible: true });
+    expect(custom.entries).toHaveLength(1);
+    expect(custom.entries[0]).toMatchObject({ heading: '', subheading: '' });
 
     const removed = applyResumeEditCommand(added, {
       type: 'remove-custom-section',
@@ -463,6 +467,35 @@ describe('resume edit commands', () => {
       'selfEvaluation',
       'custom',
     ]);
+  });
+
+  it('updates only schema-backed typography, design and page settings', () => {
+    let document = createDocument();
+    document = applyResumeEditCommand(document, {
+      type: 'set-typography-number',
+      field: 'bodyFontSizePt',
+      value: 11.5,
+    });
+    document = applyResumeEditCommand(document, {
+      type: 'set-design-color',
+      field: 'headingColor',
+      value: '#34495e',
+    });
+    document = applyResumeEditCommand(document, { type: 'set-design-divider', divider: false });
+    document = applyResumeEditCommand(document, {
+      type: 'set-page-margin',
+      side: 'left',
+      value: 18,
+    });
+    document = applyResumeEditCommand(document, {
+      type: 'set-page-numbers',
+      showPageNumbers: true,
+    });
+
+    expect(document.typography.bodyFontSizePt).toBe(11.5);
+    expect(document.design).toMatchObject({ headingColor: '#34495e', divider: false });
+    expect(document.page).toMatchObject({ marginMm: { left: 18 }, showPageNumbers: true });
+    expect(ResumeDocumentV1Schema.safeParse(document).success).toBe(true);
   });
 
   it('changes template references without modifying resume content', () => {

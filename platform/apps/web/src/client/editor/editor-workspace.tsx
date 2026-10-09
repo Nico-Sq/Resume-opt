@@ -32,6 +32,7 @@ import {
   createResumeEditorStore,
   ResumeEditorStoreProvider,
   useResumeEditorStore,
+  useResumeEditorStoreApi,
   type ResumeEditorStore,
 } from './store';
 import {
@@ -129,7 +130,16 @@ const moduleGlyph: Record<ContentSection['kind'], EditorIconName> = {
   custom: 'summary',
 };
 
-type RightPanelMode = 'style' | 'modules' | 'sorting';
+type RightPanelMode = 'template' | 'modules' | 'sorting' | 'typography' | 'design' | 'page';
+
+const rightPanelCopy: Record<RightPanelMode, { title: string; description: string }> = {
+  template: { title: '模板', description: '当前版本使用固定的简洁单栏模板' },
+  modules: { title: '模块管理', description: '控制简历模块的显示状态' },
+  sorting: { title: '布局', description: '拖动模块调整简历中的显示顺序' },
+  typography: { title: '排版', description: '调整正文、行距和内容间距' },
+  design: { title: '设计', description: '调整真实用于预览的颜色与分隔线' },
+  page: { title: '页面设置', description: '调整 A4 边距和页码显示' },
+};
 
 function estimateBlockHeight(block: RenderFlowBlock): number {
   switch (block.kind) {
@@ -697,6 +707,7 @@ function EditorWorkspaceContent({
   onShowDiscardConfirmation: () => void;
 }) {
   const resumeDocument = useResumeEditorStore((state) => state.document);
+  const editorStore = useResumeEditorStoreApi();
   const dispatch = useResumeEditorStore((state) => state.dispatch);
   const undo = useResumeEditorStore((state) => state.undo);
   const redo = useResumeEditorStore((state) => state.redo);
@@ -708,7 +719,7 @@ function EditorWorkspaceContent({
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [compactLayout, setCompactLayout] = useState(false);
-  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('style');
+  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>('template');
   const [dismissedSavePhase, setDismissedSavePhase] = useState<string | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState(resumeDocument.moduleOrder[0] ?? '');
   const [announcement, setAnnouncement] = useState('');
@@ -970,9 +981,26 @@ function EditorWorkspaceContent({
   const addCustomSection = () => {
     const title = customTitle.trim();
     if (!title) return;
-    dispatch({ type: 'add-custom-section', title });
+    const existingIds = new Set(resumeDocument.moduleOrder);
+    if (!dispatch({ type: 'add-custom-section', title })) return;
+    const sectionId = editorStore
+      .getState()
+      .document.moduleOrder.find((candidate) => !existingIds.has(candidate));
+    if (sectionId) {
+      setSelectedSectionId(sectionId);
+      openLeftPanel();
+    }
     setCustomTitle('');
     setAnnouncement(`已新增模块${title}`);
+  };
+  const removeCustomSection = (sectionValue: Extract<ContentSection, { kind: 'custom' }>) => {
+    if (!window.confirm(`确定删除“${sectionValue.title}”模块及其中内容吗？`)) return;
+    if (!dispatch({ type: 'remove-custom-section', sectionId: sectionValue.id })) return;
+    if (selectedSectionId === sectionValue.id) {
+      const fallbackId = editorStore.getState().document.moduleOrder[0] ?? '';
+      setSelectedSectionId(fallbackId);
+    }
+    setAnnouncement(`已删除模块${sectionValue.title}`);
   };
 
   const saveLabel = (() => {
@@ -1173,20 +1201,10 @@ function EditorWorkspaceContent({
                 value={selectedSection.title}
               />
             </label>
-            {selectedSection.kind === 'basic' ? (
-              <div className={styles.avatarRow}>
-                <div aria-hidden="true" className={styles.avatarPlaceholder}>
-                  <EditorIcon name="basic" size={44} />
-                </div>
-                <strong>上传头像</strong>
-                <button type="button">选择图片</button>
-              </div>
-            ) : (
-              <div className={styles.sectionSummary}>
-                <span>{selectedSection.entries.length} 条内容</span>
-                <span>{selectedSection.visible ? '在预览中显示' : '当前已隐藏'}</span>
-              </div>
-            )}
+            <div className={styles.sectionSummary}>
+              <span>{selectedSection.entries.length} 条内容</span>
+              <span>{selectedSection.visible ? '在预览中显示' : '当前已隐藏'}</span>
+            </div>
             {repeatableKinds.has(selectedSection.kind) ? (
               <button
                 className={styles.secondaryButton}
@@ -1276,22 +1294,10 @@ function EditorWorkspaceContent({
       <aside aria-label="布局设置" className={styles.rightPanel} hidden={!rightOpen}>
         <div className={styles.panelHeader}>
           <div>
-            <h2>
-              {rightPanelMode === 'style'
-                ? '模板与样式'
-                : rightPanelMode === 'modules'
-                  ? '模块管理'
-                  : '布局'}
-            </h2>
-            <p>
-              {rightPanelMode === 'style'
-                ? '调整简历的整体视觉与页面设置'
-                : rightPanelMode === 'modules'
-                  ? '控制简历模块的显示状态'
-                  : '拖动模块调整简历中的显示顺序'}
-            </p>
+            <h2>{rightPanelCopy[rightPanelMode].title}</h2>
+            <p>{rightPanelCopy[rightPanelMode].description}</p>
           </div>
-          {rightPanelMode !== 'style' ? (
+          {rightPanelMode === 'modules' || rightPanelMode === 'sorting' ? (
             <button
               className={styles.textAction}
               onClick={restoreDefault}
@@ -1316,7 +1322,7 @@ function EditorWorkspaceContent({
           </button>
         </div>
 
-        {rightPanelMode === 'style' ? (
+        {rightPanelMode === 'template' ? (
           <div className={styles.stylePanel}>
             <div className={styles.templateChoice}>
               <div className={styles.templateThumbnail}>
@@ -1330,76 +1336,227 @@ function EditorWorkspaceContent({
               </div>
               <strong>简洁单栏</strong>
             </div>
-            <fieldset className={styles.colorFieldset}>
-              <legend>主题颜色</legend>
-              {['#171717', '#343434', '#8b8b8b', '#34495e', '#d9b29e'].map((color, index) => (
-                <button
-                  aria-label={`主题颜色 ${String(index + 1)}`}
-                  className={index === 0 ? styles.colorSelected : undefined}
-                  key={color}
-                  style={{ background: color }}
-                  type="button"
-                />
-              ))}
-            </fieldset>
+            <p className={styles.panelNote}>V0.2 仅提供此基础模板，切换模板将在后续版本开放。</p>
+          </div>
+        ) : null}
+
+        {rightPanelMode === 'typography' ? (
+          <div className={styles.stylePanel}>
             <div className={styles.settingRows}>
               <label>
-                <span>字体选择</span>
-                <select defaultValue="noto">
-                  <option value="noto">Noto Sans SC</option>
-                </select>
+                <span>字体</span>
+                <strong>Noto Sans SC</strong>
               </label>
               <label>
-                <span>字重选择</span>
-                <select defaultValue="400">
-                  <option value="400">常规 400</option>
-                  <option value="600">中等 600</option>
-                </select>
+                <span>正文字号</span>
+                <input
+                  aria-label="正文字号"
+                  max="14"
+                  min="8"
+                  onBlur={() => void onFlushSave()}
+                  onChange={(event) => {
+                    if (!Number.isNaN(event.currentTarget.valueAsNumber)) {
+                      dispatch({
+                        type: 'set-typography-number',
+                        field: 'bodyFontSizePt',
+                        value: event.currentTarget.valueAsNumber,
+                      });
+                    }
+                  }}
+                  step="0.5"
+                  type="number"
+                  value={resumeDocument.typography.bodyFontSizePt}
+                />
               </label>
               <label>
+                <span>行距</span>
+                <input
+                  aria-label="行距"
+                  max="2"
+                  min="1"
+                  onBlur={() => void onFlushSave()}
+                  onChange={(event) => {
+                    if (!Number.isNaN(event.currentTarget.valueAsNumber)) {
+                      dispatch({
+                        type: 'set-typography-number',
+                        field: 'lineHeight',
+                        value: event.currentTarget.valueAsNumber,
+                      });
+                    }
+                  }}
+                  step="0.05"
+                  type="number"
+                  value={resumeDocument.typography.lineHeight}
+                />
+              </label>
+              <label>
+                <span>模块间距 (mm)</span>
+                <input
+                  aria-label="模块间距"
+                  max="20"
+                  min="0"
+                  onBlur={() => void onFlushSave()}
+                  onChange={(event) => {
+                    if (!Number.isNaN(event.currentTarget.valueAsNumber)) {
+                      dispatch({
+                        type: 'set-typography-number',
+                        field: 'sectionGapMm',
+                        value: event.currentTarget.valueAsNumber,
+                      });
+                    }
+                  }}
+                  step="0.5"
+                  type="number"
+                  value={resumeDocument.typography.sectionGapMm}
+                />
+              </label>
+              <label>
+                <span>段落间距 (mm)</span>
+                <input
+                  aria-label="段落间距"
+                  max="20"
+                  min="0"
+                  onBlur={() => void onFlushSave()}
+                  onChange={(event) => {
+                    if (!Number.isNaN(event.currentTarget.valueAsNumber)) {
+                      dispatch({
+                        type: 'set-typography-number',
+                        field: 'paragraphGapMm',
+                        value: event.currentTarget.valueAsNumber,
+                      });
+                    }
+                  }}
+                  step="0.5"
+                  type="number"
+                  value={resumeDocument.typography.paragraphGapMm}
+                />
+              </label>
+            </div>
+          </div>
+        ) : null}
+
+        {rightPanelMode === 'design' ? (
+          <div className={styles.stylePanel}>
+            <div className={styles.settingRows}>
+              <label>
+                <span>强调色</span>
+                <input
+                  aria-label="强调色"
+                  onBlur={() => void onFlushSave()}
+                  onChange={(event) =>
+                    dispatch({
+                      type: 'set-design-color',
+                      field: 'accentColor',
+                      value: event.currentTarget.value,
+                    })
+                  }
+                  type="color"
+                  value={resumeDocument.design.accentColor}
+                />
+              </label>
+              <label>
+                <span>标题色</span>
+                <input
+                  aria-label="标题色"
+                  onBlur={() => void onFlushSave()}
+                  onChange={(event) =>
+                    dispatch({
+                      type: 'set-design-color',
+                      field: 'headingColor',
+                      value: event.currentTarget.value,
+                    })
+                  }
+                  type="color"
+                  value={resumeDocument.design.headingColor}
+                />
+              </label>
+            </div>
+            <div className={styles.settingToggles}>
+              <div>
+                <span>显示分隔线</span>
+                <button
+                  aria-checked={resumeDocument.design.divider}
+                  aria-label="显示分隔线"
+                  className={styles.visibilitySwitch}
+                  onClick={() => {
+                    dispatch({
+                      type: 'set-design-divider',
+                      divider: !resumeDocument.design.divider,
+                    });
+                    void onFlushSave();
+                  }}
+                  role="switch"
+                  type="button"
+                >
+                  <span />
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {rightPanelMode === 'page' ? (
+          <div className={styles.stylePanel}>
+            <div className={styles.settingRows}>
+              <div className={styles.readonlySetting}>
                 <span>页面格式</span>
-                <select defaultValue="a4">
-                  <option value="a4">A4</option>
-                </select>
-              </label>
+                <strong>A4</strong>
+              </div>
             </div>
             <fieldset className={styles.marginFieldset}>
               <legend>页面边距</legend>
-              <label>
-                <span>上</span>
-                <input defaultValue="18" />
-                <b>mm</b>
-              </label>
-              <label>
-                <span>下</span>
-                <input defaultValue="18" />
-                <b>mm</b>
-              </label>
-              <label>
-                <span>左</span>
-                <input defaultValue="20" />
-                <b>mm</b>
-              </label>
-              <label>
-                <span>右</span>
-                <input defaultValue="20" />
-                <b>mm</b>
-              </label>
+              {(
+                [
+                  ['top', '上'],
+                  ['bottom', '下'],
+                  ['left', '左'],
+                  ['right', '右'],
+                ] as const
+              ).map(([side, label]) => (
+                <label key={side}>
+                  <span>{label}</span>
+                  <input
+                    aria-label={`${label}边距`}
+                    max="30"
+                    min="8"
+                    onBlur={() => void onFlushSave()}
+                    onChange={(event) => {
+                      if (!Number.isNaN(event.currentTarget.valueAsNumber)) {
+                        dispatch({
+                          type: 'set-page-margin',
+                          side,
+                          value: event.currentTarget.valueAsNumber,
+                        });
+                      }
+                    }}
+                    step="0.5"
+                    type="number"
+                    value={resumeDocument.page.marginMm[side]}
+                  />
+                  <b>mm</b>
+                </label>
+              ))}
             </fieldset>
             <div className={styles.settingToggles}>
-              {['显示头像', '显示联系方式', '显示分隔线'].map((label, index) => (
-                <div key={label}>
-                  <span>{label}</span>
-                  <button
-                    aria-checked={index > 0}
-                    className={styles.visibilitySwitch}
-                    role="switch"
-                    type="button"
-                  >
-                    <span />
-                  </button>
-                </div>
-              ))}
+              <div>
+                <span>显示页码</span>
+                <button
+                  aria-checked={resumeDocument.page.showPageNumbers}
+                  aria-label="显示页码"
+                  className={styles.visibilitySwitch}
+                  onClick={() => {
+                    dispatch({
+                      type: 'set-page-numbers',
+                      showPageNumbers: !resumeDocument.page.showPageNumbers,
+                    });
+                    void onFlushSave();
+                  }}
+                  role="switch"
+                  type="button"
+                >
+                  <span />
+                </button>
+              </div>
             </div>
           </div>
         ) : null}
@@ -1436,13 +1593,18 @@ function EditorWorkspaceContent({
                   >
                     <span />
                   </button>
-                  <button
-                    aria-label={`${sectionValue.title}更多操作`}
-                    className={styles.moreButton}
-                    type="button"
-                  >
-                    <EditorIcon name="more" size={19} />
-                  </button>
+                  {sectionValue.kind === 'custom' ? (
+                    <button
+                      aria-label={`删除${sectionValue.title}`}
+                      className={styles.deleteModuleButton}
+                      onClick={() => {
+                        removeCustomSection(sectionValue);
+                      }}
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  ) : null}
                 </li>
               ))}
             </ol>
@@ -1544,13 +1706,18 @@ function EditorWorkspaceContent({
                   >
                     <span />
                   </button>
-                  <button
-                    aria-label={`${sectionValue.title}更多操作`}
-                    className={styles.moreButton}
-                    type="button"
-                  >
-                    <EditorIcon name="more" size={19} />
-                  </button>
+                  {sectionValue.kind === 'custom' ? (
+                    <button
+                      aria-label={`删除${sectionValue.title}`}
+                      className={styles.deleteModuleButton}
+                      onClick={() => {
+                        removeCustomSection(sectionValue);
+                      }}
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  ) : null}
                 </li>
               ))}
             </ol>
@@ -1566,7 +1733,7 @@ function EditorWorkspaceContent({
               <button
                 className={styles.primaryButton}
                 onClick={() => {
-                  setRightPanelMode('style');
+                  setRightPanelMode('template');
                 }}
                 type="button"
               >
@@ -1586,21 +1753,15 @@ function EditorWorkspaceContent({
       <nav aria-label="编辑器工具" className={styles.rightRail}>
         {(
           [
-            ['style', 'template', '模板'],
+            ['template', 'template', '模板'],
             ['modules', 'modules', '模块'],
-            ['style', 'typography', '排版'],
-            ['style', 'design', '设计'],
-            ['style', 'export', '页面'],
+            ['typography', 'typography', '排版'],
+            ['design', 'design', '设计'],
+            ['page', 'export', '页面'],
           ] as const
         ).map(([mode, icon, label]) => (
           <button
-            aria-current={
-              rightOpen &&
-              ((label === '模板' && rightPanelMode === 'style') ||
-                (label === '模块' && rightPanelMode === 'modules'))
-                ? 'page'
-                : undefined
-            }
+            aria-current={rightOpen && rightPanelMode === mode ? 'page' : undefined}
             aria-label={label}
             key={`${icon}-${label}`}
             onClick={() => {

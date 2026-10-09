@@ -297,6 +297,71 @@ describe('editor workspace module management', () => {
     expect(screen.getByRole('status', { name: '模块操作通知' }).textContent).toBe('教育背景已隐藏');
   });
 
+  it('creates an immediately editable custom module, labels copies and supports confirmed deletion', async () => {
+    const user = userEvent.setup();
+    const { resume, store } = createFixture();
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal('confirm', confirm);
+    const { container } = render(<EditorWorkspace initialResume={resume} store={store} />);
+
+    await user.click(screen.getByRole('button', { name: '模块' }));
+    await user.type(screen.getByRole('textbox', { name: '新增自定义模块' }), '开源贡献');
+    await user.click(screen.getByRole('button', { name: '新增自定义模块' }));
+
+    const custom = sectionByKind(store.getState().document, 'custom');
+    expect(custom.entries).toHaveLength(1);
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: '模块标题' }).value).toBe(
+      '开源贡献',
+    );
+    const heading = screen.getByRole('textbox', { name: '主标题' });
+    await user.type(heading, 'Codex CLI');
+    expect(container.querySelector('.resume-page')?.textContent).toContain('Codex CLI');
+
+    await user.click(screen.getByRole('button', { name: '复制条目' }));
+    expect(sectionByKind(store.getState().document, 'custom').entries[1]?.heading).toBe(
+      'Codex CLI 副本',
+    );
+
+    await user.click(screen.getByRole('button', { name: '模块' }));
+    await user.click(screen.getByRole('button', { name: '删除开源贡献' }));
+    expect(confirm).toHaveBeenCalledWith('确定删除“开源贡献”模块及其中内容吗？');
+    expect(store.getState().document.sectionsById[custom.id]).toBeUndefined();
+  });
+
+  it('writes typography, design and page controls to the shared document and preview', async () => {
+    const user = userEvent.setup();
+    const { resume, store } = createFixture();
+    const { container } = render(<EditorWorkspace initialResume={resume} store={store} />);
+
+    await user.click(screen.getByRole('button', { name: '排版' }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: '正文字号' }), {
+      target: { value: '11.5' },
+    });
+    expect(store.getState().document.typography.bodyFontSizePt).toBe(11.5);
+
+    await user.click(screen.getByRole('button', { name: '设计' }));
+    fireEvent.change(screen.getByLabelText('标题色'), { target: { value: '#34495e' } });
+    await user.click(screen.getByRole('switch', { name: '显示分隔线' }));
+    expect(store.getState().document.design).toMatchObject({
+      headingColor: '#34495e',
+      divider: false,
+    });
+
+    await user.click(screen.getByRole('button', { name: '页面' }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: '左边距' }), {
+      target: { value: '18' },
+    });
+    await user.click(screen.getByRole('switch', { name: '显示页码' }));
+    expect(store.getState().document.page).toMatchObject({
+      marginMm: { left: 18 },
+      showPageNumbers: true,
+    });
+    const renderer = container.querySelector<HTMLElement>('.resume-page')?.parentElement;
+    expect(renderer?.style.getPropertyValue('--resume-body-size')).toBe('11.5pt');
+    expect(renderer?.style.getPropertyValue('--resume-heading-color')).toBe('#34495e');
+    expect(renderer?.style.getPropertyValue('--resume-divider-width')).toBe('0mm');
+  });
+
   it('restores default order and visibility while keeping the restore control focused', async () => {
     const user = userEvent.setup();
     const { resume, store } = createFixture();
@@ -377,6 +442,8 @@ describe('editor workspace module management', () => {
     for (const name of ['分享', '导出 PDF', 'AI 优化', 'JD 匹配']) {
       expect(screen.queryAllByRole('button', { name })).toHaveLength(0);
     }
+    expect(screen.queryByText('上传头像')).toBeNull();
+    expect(screen.queryAllByLabelText(/更多操作/u)).toHaveLength(0);
     expect(screen.queryByText(/resume\.example/u)).toBeNull();
     expect(screen.queryByText(/本月剩余.*PDF/u)).toBeNull();
     for (const name of ['模板', '模块', '排版', '设计', '页面']) {
@@ -507,6 +574,23 @@ describe('editor workspace module management', () => {
     await user.tab();
     expect(store.getState().undo()).toBe(true);
     expect(sectionByKind(store.getState().document, 'intent').entries[0]?.industries).toEqual([]);
+  });
+
+  it('keeps an active IME composition in the input until the complete value is committed', async () => {
+    const { resume, store } = createFixture();
+    render(<EditorWorkspace initialResume={resume} store={store} />);
+    const name = screen.getByRole<HTMLInputElement>('textbox', { name: '姓名' });
+
+    fireEvent.compositionStart(name);
+    fireEvent.change(name, { target: { value: '林小满中' } });
+    await waitFor(() => {
+      expect(name.value).toBe('林小满中');
+    });
+    fireEvent.change(name, { target: { value: '林小满中文' } });
+    fireEvent.compositionEnd(name);
+
+    expect(name.value).toBe('林小满中文');
+    expect(sectionByKind(store.getState().document, 'basic').entries[0]?.name).toBe('林小满中文');
   });
 
   it('buffers an incomplete link and only commits a schema-valid URL on blur', async () => {

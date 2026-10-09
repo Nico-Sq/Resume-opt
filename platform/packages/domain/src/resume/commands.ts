@@ -51,6 +51,15 @@ export type ResumeEditCommand =
   | { type: 'add-custom-section'; title: string; atIndex?: number }
   | { type: 'remove-custom-section'; sectionId: string }
   | { type: 'restore-default-section-layout' }
+  | {
+      type: 'set-typography-number';
+      field: 'bodyFontSizePt' | 'lineHeight' | 'sectionGapMm' | 'paragraphGapMm';
+      value: number;
+    }
+  | { type: 'set-design-color'; field: 'accentColor' | 'headingColor'; value: string }
+  | { type: 'set-design-divider'; divider: boolean }
+  | { type: 'set-page-margin'; side: 'top' | 'right' | 'bottom' | 'left'; value: number }
+  | { type: 'set-page-numbers'; showPageNumbers: boolean }
   | { type: 'set-template-reference'; templateId: string; templateVersion: string };
 
 export type ResumeEditErrorCode =
@@ -246,6 +255,27 @@ function cloneWithFreshIds(value: unknown, idFactory: IdFactory, rootId?: string
       key === 'id' ? (rootId ?? idFactory()) : cloneWithFreshIds(child, idFactory),
     ]),
   );
+}
+
+function copiedEntryName(value: string): string {
+  if (value.length === 0) return '副本';
+  return `${Array.from(value).slice(0, 197).join('')} 副本`;
+}
+
+function labelCopiedEntry(sectionValue: ContentSection, entry: unknown): void {
+  if (entry === null || typeof entry !== 'object') return;
+  const record = entry as Record<string, unknown>;
+  const field =
+    sectionValue.kind === 'education'
+      ? 'school'
+      : ['work', 'internship', 'campus'].includes(sectionValue.kind)
+        ? 'organization'
+        : ['project', 'skillsCertificates', 'awards'].includes(sectionValue.kind)
+          ? 'name'
+          : sectionValue.kind === 'custom'
+            ? 'heading'
+            : null;
+  if (field && typeof record[field] === 'string') record[field] = copiedEntryName(record[field]);
 }
 
 export function copyResumeDocumentWithFreshIds(
@@ -452,7 +482,9 @@ function applyCommand(
       }
       const entries = sectionValue.entries as unknown[];
       const source = entries[sourceIndex];
-      entries.splice(sourceIndex + 1, 0, cloneWithFreshIds(source, idFactory));
+      const copy = cloneWithFreshIds(source, idFactory);
+      labelCopiedEntry(sectionValue, copy);
+      entries.splice(sourceIndex + 1, 0, copy);
       return;
     }
     case 'remove-entry': {
@@ -496,13 +528,17 @@ function applyCommand(
     }
     case 'add-custom-section': {
       const sectionId = idFactory();
-      document.sectionsById[sectionId] = {
+      const sectionValue: Extract<ContentSection, { kind: 'custom' }> = {
         id: sectionId,
         kind: 'custom',
         title: command.title,
         visible: true,
         entries: [],
       };
+      sectionValue.entries.push(
+        createEntry(sectionValue, idFactory) as (typeof sectionValue.entries)[number],
+      );
+      document.sectionsById[sectionId] = sectionValue;
       insertAt(document.moduleOrder, sectionId, command.atIndex);
       return;
     }
@@ -547,6 +583,21 @@ function applyCommand(
       }
       return;
     }
+    case 'set-typography-number':
+      document.typography[command.field] = command.value;
+      return;
+    case 'set-design-color':
+      document.design[command.field] = command.value;
+      return;
+    case 'set-design-divider':
+      document.design.divider = command.divider;
+      return;
+    case 'set-page-margin':
+      document.page.marginMm[command.side] = command.value;
+      return;
+    case 'set-page-numbers':
+      document.page.showPageNumbers = command.showPageNumbers;
+      return;
     case 'set-template-reference':
       document.templateId = command.templateId;
       document.templateVersion = command.templateVersion;

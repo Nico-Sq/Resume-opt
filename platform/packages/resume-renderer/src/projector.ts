@@ -336,7 +336,14 @@ export function createResumeRenderModel(input: RendererInput): ResumeRenderModel
     template: { id: input.templateManifest.id, version: input.templateManifest.version },
     locale: document.locale,
     name: basicEntry ? textIfPresent(basicEntry.name) : '',
-    headline: intentEntry ? textIfPresent(intentEntry.targetRole) : '',
+    headline: intentEntry
+      ? listIfPresent([
+          intentEntry.targetRole,
+          ...intentEntry.industries,
+          ...intentEntry.cities,
+          intentEntry.employmentType,
+        ]).join(' · ')
+      : '',
     avatarUrl: avatarUrl(input, basic),
     contacts,
     links: basicEntry ? visibleLinks(basicEntry.links, input.renderPolicy) : [],

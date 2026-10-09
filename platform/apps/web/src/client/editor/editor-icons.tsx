@@ -14,7 +14,6 @@ export type EditorIconName =
   | 'intent'
   | 'internship'
   | 'modules'
-  | 'more'
   | 'pencil'
   | 'plus'
   | 'project'
@@ -199,14 +198,6 @@ export function EditorIcon({
       return (
         <svg {...common}>
           <path d="M12 5v14M5 12h14" {...stroke} />
-        </svg>
-      );
-    case 'more':
-      return (
-        <svg {...common}>
-          <circle cx="5" cy="12" r="1" fill="currentColor" />
-          <circle cx="12" cy="12" r="1" fill="currentColor" />
-          <circle cx="19" cy="12" r="1" fill="currentColor" />
         </svg>
       );
   }

@@ -28,7 +28,7 @@ export const RESUME_RENDERER_CSS = `
 .resume-renderer .resume-header .resume-link-list a { color: #4a4a4a; text-decoration: none; }
 .resume-renderer .resume-contact-list > span { display: inline-flex; align-items: center; gap: 1.5mm; }
 .resume-renderer .resume-contact-icon { flex: 0 0 auto; color: #555; }
-.resume-renderer .resume-section-heading { margin: var(--resume-section-gap) 0 var(--resume-paragraph-gap); border-bottom: .35mm solid #b8c0c7; color: var(--resume-heading-color); font-weight: 700; line-height: 1.55; }
+.resume-renderer .resume-section-heading { margin: var(--resume-section-gap) 0 var(--resume-paragraph-gap); border-bottom: var(--resume-divider-width) solid #b8c0c7; color: var(--resume-heading-color); font-weight: 700; line-height: 1.55; }
 .resume-renderer .resume-entry-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0; margin-block-end: var(--resume-paragraph-gap); }
 .resume-renderer .resume-entry-heading > :not(:first-child)::before { content: "|"; margin: 0 2.5mm; color: #9a9a9a; font-weight: 400; }
 .resume-renderer .resume-entry-meta { color: #595959; }
@@ -59,5 +59,6 @@ export function createRendererCssVariables(model: ResumeRenderModel): Record<str
     '--resume-content-width': `${String(210 - model.page.marginMm.left - model.page.marginMm.right)}mm`,
     '--resume-accent-color': model.design.accentColor,
     '--resume-heading-color': model.design.headingColor,
+    '--resume-divider-width': model.design.divider ? '.35mm' : '0mm',
   };
 }
