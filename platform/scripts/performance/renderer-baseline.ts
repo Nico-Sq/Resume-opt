@@ -34,7 +34,7 @@ const MetricBudgetSchema = z.strictObject({
 
 export const PerformanceBudgetSchema = z.strictObject({
   schemaVersion: z.literal(1),
-  productVersion: z.literal('V0.1'),
+  productVersion: z.literal('V0.2'),
   status: z.literal('engineering-baseline'),
   description: z.string().min(1),
   metrics: z.strictObject({
@@ -44,6 +44,9 @@ export const PerformanceBudgetSchema = z.strictObject({
     localDraftCommit: MetricBudgetSchema,
     saveApi: MetricBudgetSchema,
     inputToCloudAck: MetricBudgetSchema,
+    resumeListApi: MetricBudgetSchema,
+    resumeCrudApi: MetricBudgetSchema,
+    dashboardFirstRender: MetricBudgetSchema,
   }),
 });
 
@@ -123,7 +126,7 @@ export function percentile(samples: readonly number[], quantile: number): number
   return sorted[Math.ceil(sorted.length * quantile) - 1] ?? sorted[sorted.length - 1] ?? 0;
 }
 
-function summarize(samples: readonly number[]) {
+export function summarizePerformanceSamples(samples: readonly number[]) {
   return {
     samples: samples.length,
     p50: percentile(samples, 0.5),
@@ -188,8 +191,8 @@ export function runRendererBaseline(budget: PerformanceBudget, sampleCount = 100
     }
   }
 
-  const rendererProjection = summarize(projectionSamples);
-  const pagination = summarize(paginationSamples);
+  const rendererProjection = summarizePerformanceSamples(projectionSamples);
+  const pagination = summarizePerformanceSamples(paginationSamples);
   const checks = {
     rendererProjection: rendererProjection.p95 <= budget.metrics.rendererProjection.p95Max,
     pagination: pagination.p95 <= budget.metrics.pagination.p95Max,
