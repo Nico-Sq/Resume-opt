@@ -1,0 +1,1465 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>简历工作台 · V0.2 视觉参考</title>
+<style>
+/* ============================================================
+   设计系统 Design Tokens
+   ============================================================ */
+:root{
+  /* 背景层级 */
+  --bg:#080A0D;            /* 应用底色 / 舞台 */
+  --bg-nav:#0C0F13;        /* 顶栏 */
+  --bg-panel:#0D1014;      /* 侧栏面板 */
+  --bg-card:#101319;       /* 卡片 */
+  --bg-card-2:#141820;     /* 抬升卡片/悬浮 */
+  --bg-input:#101319;      /* 输入框 */
+  --bg-input-h:#151922;
+  /* 描边 */
+  --line:rgba(255,255,255,.07);
+  --line-2:rgba(255,255,255,.12);
+  --line-3:rgba(255,255,255,.2);
+  /* 文字 */
+  --t1:#F1F4F8;
+  --t2:#9AA4B2;
+  --t3:#68727F;
+  --t4:#4E5661;
+  /* 强调色（克制使用：选中态 / 焦点 / AI） */
+  --brand:#6C94F5;
+  --brand-2:#8FB0FF;
+  --brand-bg:rgba(108,148,245,.12);
+  --brand-line:rgba(108,148,245,.42);
+  /* 语义色 */
+  --ok:#35D098;   --ok-bg:rgba(53,208,152,.12);  --ok-line:rgba(53,208,152,.4);
+  --warn:#F0A63B; --warn-bg:rgba(240,166,59,.1); --warn-line:rgba(240,166,59,.45);
+  --bad:#F2606B;  --bad-bg:rgba(242,96,107,.1);  --bad-line:rgba(242,96,107,.45);
+  /* 圆角 */
+  --r-s:6px; --r:8px; --r-l:12px; --r-xl:14px; --r-m:16px;
+  /* 阴影 */
+  --sh-btn:0 1px 2px rgba(0,0,0,.35);
+  --sh-card:0 1px 2px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.03);
+  --sh-pop:0 18px 50px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+  --sh-modal:0 40px 100px rgba(0,0,0,.68), 0 6px 20px rgba(0,0,0,.45);
+  --sh-paper:0 2px 4px rgba(0,0,0,.3), 0 28px 64px rgba(0,0,0,.55);
+  --font:"PingFang SC","Noto Sans SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI",-apple-system,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:var(--font);background:#05070A;color:var(--t1);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  font-feature-settings:"tnum" 1;
+}
+::selection{background:rgba(108,148,245,.3)}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,textarea,select{font-family:inherit;color:var(--t1)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:8px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.18)}
+::-webkit-scrollbar-track{background:transparent}
+
+/* 图标 */
+.ic{width:1em;height:1em;display:inline-block;vertical-align:-.125em;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic-fw{width:100%;height:100%}
+
+/* ============================================================
+   评审外壳（不属于产品界面）
+   ============================================================ */
+#bar{height:52px;background:#0E1218;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;padding:0 18px;position:sticky;top:0;z-index:50}
+#bar .rb{font-size:13px;font-weight:600;letter-spacing:.02em;margin-right:14px;display:flex;align-items:center;gap:8px;color:var(--t1)}
+#bar .rb .dot{width:7px;height:7px;border-radius:50%;background:var(--brand);box-shadow:0 0 8px var(--brand)}
+#bar .tab{font-size:12.5px;color:var(--t3);padding:6px 12px;border-radius:7px;transition:.15s;white-space:nowrap;font-weight:500}
+#bar .tab:hover{color:var(--t2);background:rgba(255,255,255,.05)}
+#bar .tab.on{color:var(--t1);background:#1D242E}
+#bar .tab .n{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;background:rgba(255,255,255,.08);font-size:10px;margin-right:6px;color:var(--t2)}
+#bar .tab.on .n{background:var(--brand);color:#fff}
+#bar .sp{flex:1}
+#stage{width:100%;overflow:auto;padding:28px 0 48px}
+#canvas{width:1440px;margin:0 auto;transform-origin:top center}
+#canvas .screen{display:none}
+#canvas.single .screen.active{display:block}
+#canvas.overview{display:grid;grid-template-columns:repeat(2,1fr);gap:34px;width:1320px}
+#canvas.overview .ov-wrap .screen{display:block;transform:scale(.442);transform-origin:top left;border-radius:14px;overflow:hidden}
+#canvas.overview .ov-wrap{height:398px;border-radius:14px;outline:1px solid var(--line-2);outline-offset:0;position:relative;overflow:hidden;box-shadow:var(--sh-pop)}
+#canvas.overview .ov-wrap .screen{position:absolute;top:0;left:0;width:1440px;height:900px;pointer-events:none}
+#canvas.overview .ov-wrap .cap{position:absolute;left:14px;bottom:10px;z-index:2;font-size:12px;color:var(--t2);background:rgba(10,12,16,.72);backdrop-filter:blur(6px);padding:5px 11px;border-radius:7px;border:1px solid var(--line)}
+
+/* ============================================================
+   通用元件
+   ============================================================ */
+.screen{width:1440px;height:900px;background:var(--bg);position:relative;overflow:hidden;border-radius:10px}
+
+/* 按钮 */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:38px;padding:0 18px;border-radius:var(--r);font-size:13.5px;font-weight:550;letter-spacing:.01em;transition:.16s;white-space:nowrap;line-height:1}
+.btn .ic{width:15px;height:15px}
+.btn-primary{background:#F4F6FA;color:#0E1116;box-shadow:0 1px 0 rgba(255,255,255,.35) inset,0 2px 8px rgba(0,0,0,.4)}
+.btn-primary:hover{background:#fff;transform:translateY(-1px);box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 6px 18px rgba(0,0,0,.45)}
+.btn-dark{background:rgba(255,255,255,.08);color:var(--t1);border:1px solid var(--line-2)}
+.btn-dark:hover{background:rgba(255,255,255,.12)}
+.btn-ghost{background:transparent;color:var(--t1);border:1px solid var(--line-3)}
+.btn-ghost:hover{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.28)}
+.btn:disabled,.btn.is-disabled{opacity:.42;pointer-events:none}
+.btn-lg{height:46px;padding:0 30px;font-size:14.5px;border-radius:9px}
+.btn-sm{height:30px;padding:0 13px;font-size:12.5px;border-radius:7px}
+.btn-xs{height:28px;padding:0 11px;font-size:12px;border-radius:7px}
+.btn-outline-warn{border:1px solid var(--warn-line);color:var(--warn);background:var(--warn-bg)}
+.btn-outline-warn:hover{background:rgba(240,166,59,.17)}
+
+/* 表单 */
+.field{margin-bottom:18px}
+.field-label{display:block;font-size:12.5px;font-weight:500;color:var(--t2);margin-bottom:8px;letter-spacing:.02em}
+.input,.textarea,.select{
+  width:100%;background:var(--bg-input);border:1px solid var(--line-2);
+  border-radius:var(--r);padding:0 13px;height:40px;font-size:13.5px;color:var(--t1);
+  transition:border-color .15s,box-shadow .15s,background .15s;outline:none;width:100%}
+.textarea{height:auto;padding:11px 13px;line-height:1.7;resize:none}
+.input::placeholder,.textarea::placeholder{color:var(--t4)}
+.input:hover,.textarea:hover,.select:hover{border-color:rgba(255,255,255,.2);background:var(--bg-input-h)}
+.input:focus,.textarea:focus,.select:focus{border-color:var(--brand-line);box-shadow:0 0 0 3px rgba(108,148,245,.16);background:var(--bg-input-h)}
+.input:disabled,.textarea:disabled{color:var(--t3);background:#0D1016;cursor:not-allowed}
+.select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239AA4B2' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;cursor:pointer}
+.select:disabled{opacity:.7}
+
+/* 开关 */
+.switch{position:relative;width:42px;height:24px;border-radius:999px;background:#262C35;border:1px solid rgba(255,255,255,.08);transition:.2s;flex:none;cursor:pointer}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#8B95A1;transition:.2s}
+.switch.on{background:#E8ECF2;border-color:#E8ECF2}
+.switch.on::after{left:21px;background:#14181F;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+
+/* 复选框（单色高级感） */
+.chk{width:18px;height:18px;border-radius:5px;border:1px solid var(--line-3);background:#0F1319;display:inline-grid;place-items:center;flex:none;transition:.15s}
+.chk .ic{width:12px;height:12px;stroke:#0F1319;stroke-width:3;opacity:0}
+.chk.on{background:#E9EDF3;border-color:#E9EDF3}
+.chk.on .ic{opacity:1}
+
+/* ============================================================
+   画面一 · 工作台（顶栏）
+   ============================================================ */
+.topnav{height:62px;background:var(--bg-nav);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 30px;gap:26px}
+.brand{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:650;letter-spacing:.02em}
+.brand .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(145deg,#232A36,#161B23);border:1px solid var(--line-2);display:grid;place-items:center;color:var(--t1)}
+.brand .logo .ic{width:16px;height:16px}
+.nav-links{display:flex;align-items:stretch;height:62px;gap:4px}
+.nav-links a{display:flex;align-items:center;padding:0 17px;font-size:14px;font-weight:500;color:var(--t3);position:relative;transition:color .15s;text-decoration:none}
+.nav-links a:hover{color:var(--t2)}
+.nav-links a.on{color:var(--t1);font-weight:600}
+.nav-links a.on::after{content:"";position:absolute;left:17px;right:17px;bottom:0;height:2px;border-radius:2px;background:#F1F4F8}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.pill{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.03);font-size:12.5px;color:var(--t2);font-weight:500}
+.pill .ic{width:14px;height:14px}
+.pill .g-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 7px rgba(53,208,152,.7)}
+.pill.quota{font-variant-numeric:tabular-nums}
+.icon-btn{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;color:var(--t2);transition:.15s;position:relative}
+.icon-btn:hover{background:rgba(255,255,255,.06);color:var(--t1)}
+.icon-btn .ic{width:18px;height:18px}
+.avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(145deg,#454E5B,#2B313B);color:#fff;font-size:13px;font-weight:600;display:grid;place-items:center;border:1px solid rgba(255,255,255,.12)}
+.avatar-cluster{display:flex;align-items:center;gap:3px;padding-right:4px}
+.avatar-cluster .ic{width:14px;color:var(--t3)}
+
+/* 页面容器 */
+.page{padding:38px 120px 40px;height:838px;position:relative}
+.page::before{content:"";position:absolute;top:-160px;left:50%;transform:translateX(-50%);width:900px;height:520px;background:radial-gradient(closest-side,rgba(120,140,190,.07),transparent);pointer-events:none}
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;position:relative}
+.page-head h1{font-size:25px;font-weight:700;letter-spacing:-.01em;color:var(--t1)}
+.page-head p{margin-top:7px;font-size:13.5px;color:var(--t2);letter-spacing:.01em}
+
+/* 搜索 */
+.search{position:relative;width:330px}
+.search .ic{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--t3)}
+.search input{height:42px;background:rgba(255,255,255,.035);border:1px solid var(--line-2);border-radius:10px;padding:0 14px 0 40px;font-size:13.5px;width:100%;outline:none;transition:.15s}
+.search input::placeholder{color:var(--t4)}
+.search input:hover{border-color:rgba(255,255,255,.18)}
+.search input:focus{border-color:var(--brand-line);box-shadow:0 0 0 3px rgba(108,148,245,.14);background:rgba(255,255,255,.05)}
+
+/* 空状态 */
+.empty{position:absolute;left:0;right:0;top:292px;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 20px}
+.empty .e-ic{width:104px;height:104px;border-radius:26px;background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.015));border:1px solid var(--line-2);display:grid;place-items:center;color:#B9C2CF;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 12px 36px rgba(0,0,0,.35);margin-bottom:30px}
+.empty .e-ic .ic{width:46px;height:46px;stroke-width:1.4}
+.empty h2{font-size:27px;font-weight:700;letter-spacing:-.01em;margin-bottom:13px}
+.empty .e-desc{font-size:14.5px;color:var(--t2);line-height:1.7;max-width:580px}
+.empty .e-btns{display:flex;gap:14px;margin:30px 0 52px}
+.steps{display:flex;align-items:center;gap:0;color:var(--t2)}
+.steps .st{display:flex;align-items:center;gap:11px;font-size:13.5px;font-weight:500}
+.steps .num{width:30px;height:30px;border-radius:50%;border:1.5px solid rgba(255,255,255,.24);display:grid;place-items:center;font-size:13px;font-weight:600;color:var(--t1);background:rgba(255,255,255,.03)}
+.steps .conn{width:52px;height:1px;background:var(--line-2);margin:0 18px}
+
+/* ============================================================
+   画面二 · 创建简历
+   ============================================================ */
+.crumb{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--t2);margin-bottom:14px;font-weight:500;cursor:pointer}
+.crumb:hover{color:var(--t1)}
+.crumb .ic{width:15px;height:15px}
+.create-card{position:relative;border:1px solid var(--line);border-radius:var(--r-xl);background:linear-gradient(180deg,#0F1217,#0C0F14);box-shadow:var(--sh-card);height:618px;display:grid;grid-template-columns:392px 1fr;overflow:hidden}
+.create-col{padding:30px 30px 26px;display:flex;flex-direction:column;min-width:0}
+.create-col.right{border-left:1px solid var(--line);padding-left:32px}
+.col-title{font-size:17.5px;font-weight:650;letter-spacing:0}
+.col-sub{font-size:12.5px;color:var(--t3);margin-top:5px;margin-bottom:22px}
+.option{display:flex;align-items:center;gap:15px;padding:17px 18px;border:1px solid var(--line-2);border-radius:var(--r-l);background:var(--bg-card);margin-bottom:13px;cursor:pointer;transition:.16s;position:relative}
+.option:hover{border-color:rgba(255,255,255,.22);background:#131720}
+.option.on{border-color:var(--brand-line);background:linear-gradient(180deg,rgba(108,148,245,.09),rgba(108,148,245,.04));box-shadow:0 0 0 1px rgba(108,148,245,.2),inset 0 1px 0 rgba(255,255,255,.05)}
+.option .o-ic{width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);display:grid;place-items:center;color:var(--t1);flex:none}
+.option .o-ic .ic{width:19px;height:19px}
+.option .o-main{flex:1;min-width:0}
+.option .o-t{font-size:14.5px;font-weight:600;letter-spacing:.01em}
+.option .o-d{font-size:12px;color:var(--t3);margin-top:3px}
+.option .radio{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line-3);display:grid;place-items:center;flex:none}
+.option.on .radio{border-color:var(--brand)}
+.option .radio::after{content:"";width:10px;height:10px;border-radius:50%;background:var(--brand);transform:scale(0);transition:.15s}
+.option.on .radio::after{transform:scale(1)}
+.badge-soon{font-size:11px;color:var(--t2);background:#1B212B;border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-weight:500}
+.plain-note{margin-top:auto;display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--t3)}
+.plain-note .ic{width:16px;height:16px;color:var(--t3)}
+
+.seg{display:flex;background:#0E1218;border:1px solid var(--line-2);border-radius:9px;padding:4px;gap:4px}
+.seg button{flex:1;height:36px;border-radius:6px;font-size:13.5px;font-weight:500;color:var(--t3);transition:.16s}
+.seg button:hover{color:var(--t2)}
+.seg button.on{background:#242B36;color:var(--t1);box-shadow:0 1px 3px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.06);font-weight:600}
+.seg-help{font-size:12px;color:var(--t3);margin:8px 2px 0}
+
+.form-row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.tpl-pick{display:flex;gap:16px;align-items:flex-start;margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:var(--r-l);background:rgba(255,255,255,.02)}
+.tpl-thumb{width:72px;height:96px;background:#fff;border-radius:5px;flex:none;padding:8px 7px;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+.tpl-thumb i{display:block;height:4px;border-radius:2px;background:#2A2F38;margin-bottom:5px}
+.tpl-thumb i:first-child{height:8px;width:60%;background:#111}
+.tpl-thumb i:nth-child(2){width:85%;background:#9AA4B2}
+.tpl-thumb i:nth-child(3){width:92%}
+.tpl-thumb i:nth-child(4){width:70%}
+.tpl-thumb i:nth-child(5){width:88%}
+.tpl-thumb i:nth-child(6){width:76%}
+.tpl-thumb i:nth-child(n+3){background:#C7CDD6;height:3px;margin-bottom:6px}
+.tpl-pick .tp-t{font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px}
+.tp-check{width:17px;height:17px;border-radius:50%;background:var(--brand);display:inline-grid;place-items:center}
+.tp-check .ic{width:11px;height:11px;stroke:#fff;stroke-width:3}
+.tpl-pick .tp-d{font-size:12.5px;color:var(--t3);margin:6px 0 10px}
+.tpl-pick .tp-link{font-size:12.5px;color:var(--brand-2);display:inline-flex;align-items:center;gap:4px;font-weight:500}
+.tpl-pick .tp-link .ic{width:13px;height:13px}
+
+.create-foot{position:absolute;left:0;right:0;bottom:0;height:72px;border-top:1px solid var(--line);background:rgba(255,255,255,.015);display:flex;align-items:center;padding:0 30px;gap:10px}
+.foot-note{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--t3)}
+.foot-note .ic{width:16px;height:16px}
+.create-foot .right{margin-left:auto;display:flex;gap:12px}
+
+/* ============================================================
+   编辑器骨架
+   ============================================================ */
+.editor{display:grid;grid-template-rows:54px 1fr;background:var(--bg)}
+.topbar{background:var(--bg-nav);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 18px;gap:16px}
+.tb-back{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--t2);font-weight:500;padding:5px 8px;border-radius:7px}
+.tb-back:hover{color:var(--t1);background:rgba(255,255,255,.05)}
+.tb-back .ic{width:16px;height:16px}
+.tb-title{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}
+.tb-title .ic{width:14px;height:14px;color:var(--t3)}
+.tb-save{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--t2);font-weight:500}
+.tb-save .ic{width:15px;height:15px;color:var(--ok)}
+.tb-act{margin-left:auto;display:flex;align-items:center;gap:4px}
+.tb-act .ab{display:flex;align-items:center;gap:6px;height:32px;padding:0 11px;border-radius:8px;font-size:13px;color:var(--t2);font-weight:500}
+.tb-act .ab:hover{background:rgba(255,255,255,.06);color:var(--t1)}
+.tb-act .ab .ic{width:15px;height:15px}
+.tb-act .ab:disabled{opacity:.4;pointer-events:none}
+.tb-act .div-v{width:1px;height:18px;background:var(--line-2);margin:2px 8px}
+
+.editor-body{display:grid;grid-template-columns:56px 330px 1fr 392px 56px;height:100%;position:relative}
+.rail{background:#0A0D11;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:5px;z-index:5}
+.rail.right{border-right:none;border-left:1px solid var(--line)}
+.rail-btn{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;color:#5D6672;position:relative;transition:.15s}
+.rail-btn:hover{color:var(--t1);background:rgba(255,255,255,.05)}
+.rail-btn.on{color:var(--t1);background:#1B222D;box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+.rail-btn .ic{width:19px;height:19px}
+.rail-btn .rdot{position:absolute;top:7px;right:7px;width:7px;height:7px;border-radius:50%;border:1.5px solid #0A0D11}
+.rdot.g{background:var(--ok)}.rdot.o{background:var(--warn)}
+.rail-tip{position:absolute;left:46px;top:50%;transform:translateY(-50%);background:#1E242E;border:1px solid var(--line-2);font-size:11.5px;padding:4px 9px;border-radius:6px;color:var(--t1);white-space:nowrap;z-index:10;pointer-events:none;box-shadow:var(--sh-btn)}
+
+/* 左侧表单面板 */
+.lpanel{background:var(--bg-panel);border-right:1px solid var(--line);padding:26px 24px 96px;overflow:hidden;position:relative}
+.rpanel{background:var(--bg-panel);border-left:1px solid var(--line);padding:24px 22px 24px;overflow:hidden;position:relative}
+.panel-h h2{font-size:19px;font-weight:650;letter-spacing:.01em}
+.panel-h p{font-size:12.5px;color:var(--t3);margin-top:5px}
+.avatar-row{display:flex;align-items:center;gap:14px;margin:24px 0 24px}
+.av{width:68px;height:68px;border-radius:50%;background:linear-gradient(145deg,#333A45,#242A33);display:grid;place-items:center;color:#8A94A1;border:1px solid rgba(255,255,255,.09);flex:none}
+.av .ic{width:30px;height:30px}
+.av-up{font-size:14px;font-weight:600;margin-bottom:9px}
+.avatar-row .btn-sm{margin-left:auto}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:16px 18px}
+.fgrid .full{grid-column:1/-1}
+.fgrid .input,.fgrid .textarea{height:38px;font-size:13px}
+.fgrid .textarea{height:104px;padding:10px 12px}
+.fgrid .field{margin-bottom:0}
+.fgrid .field-label{font-size:12px;margin-bottom:7px}
+.lpanel-foot{position:absolute;left:0;right:0;bottom:0;padding:16px 20px 18px;background:linear-gradient(180deg,rgba(13,16,20,0),var(--bg-panel) 22%);display:flex;gap:12px}
+.lpanel-foot .btn{flex:1;height:40px;background:#151A22;border:1px solid var(--line-2);font-size:13.5px}
+.lpanel-foot .btn:hover{background:#1A202A}
+.lpanel-foot .btn .ic{width:15px;height:15px}
+
+/* 折叠手把 */
+.fold{position:absolute;top:50%;transform:translateY(-50%);width:20px;height:44px;background:#161B23;border:1px solid var(--line-2);border-radius:8px;display:grid;place-items:center;color:var(--t3);z-index:6;box-shadow:var(--sh-btn)}
+.fold .ic{width:13px;height:13px}
+.fold.l{right:-11px}.fold.r{left:-11px}
+
+/* 中央舞台 & 纸张 */
+.stage{position:relative;background:#07090C;overflow:hidden;display:flex;align-items:flex-start;justify-content:center;padding-top:34px}
+.stage::before{content:"";position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:760px;height:620px;background:radial-gradient(closest-side,rgba(128,146,190,.1),transparent);pointer-events:none}
+.stage::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 0%,transparent 55%,rgba(0,0,0,.45));pointer-events:none}
+.paper{position:relative;width:468px;background:#fff;color:#20242B;border-radius:3px;box-shadow:var(--sh-paper);padding:34px 40px 32px;font-size:11px;line-height:1.65;z-index:1}
+.p-name{font-size:33px;font-weight:750;letter-spacing:.02em;color:#12151A;line-height:1.1}
+.p-role{font-size:14px;font-weight:500;color:#5A6470;margin-top:7px}
+.p-contact{display:flex;flex-wrap:wrap;gap:7px 18px;margin-top:13px;font-size:11px;color:#5C6570}
+.p-contact span{display:inline-flex;align-items:center;gap:5px}
+.p-contact .ic{width:12px;height:12px;color:#7A828C}
+.p-sec{margin-top:20px}
+.p-sec h3{font-size:13px;font-weight:700;color:#1B1F27;letter-spacing:.04em;padding-bottom:7px;border-bottom:1.5px solid #DDE1E7;margin-bottom:10px}
+.p-meta{font-size:11px;color:#6E7682;display:flex;flex-wrap:wrap;gap:0;margin-bottom:7px}
+.p-meta b{color:#262C35;font-weight:600}
+.p-meta i{width:3px;height:3px;border-radius:50%;background:#9AA2AD;display:inline-block;margin:0 9px;vertical-align:middle}
+.p-sec p,.p-sec li{color:#39404A}
+.p-sec ul{list-style:none}
+.p-sec li{position:relative;padding-left:12px;margin-bottom:3px}
+.p-sec li::before{content:"";position:absolute;left:0;top:8px;width:4px;height:4px;border-radius:50%;background:#5A6470}
+.p-skills{color:#565F6B}
+.paper .hl{border-radius:5px;transition:.2s}
+.paper.hl-project .sec-project{background:rgba(108,148,245,.08);outline:1.5px solid rgba(108,148,245,.55);outline-offset:6px}
+
+.zoom{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:3;display:flex;align-items:center;height:38px;background:rgba(22,26,33,.92);backdrop-filter:blur(8px);border:1px solid var(--line-2);border-radius:999px;padding:0 5px;box-shadow:var(--sh-pop)}
+.zoom button{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:var(--t2)}
+.zoom button:hover{background:rgba(255,255,255,.08);color:var(--t1)}
+.zoom .ic{width:14px;height:14px}
+.zoom .zv{width:54px;text-align:center;font-size:12.5px;font-weight:550;color:var(--t1)}
+.zoom .zdiv{width:1px;height:16px;background:var(--line-2);margin:0 5px}
+.zoom .fit{height:28px;padding:0 14px;border-radius:999px;font-size:12.5px;color:var(--t2);font-weight:500}
+.zoom .fit:hover{background:rgba(255,255,255,.08);color:var(--t1)}
+
+/* ============================================================
+   右侧面板 · 模板与样式
+   ============================================================ */
+.tpl-row{display:flex;align-items:center;gap:15px;margin:18px 0 22px}
+.tpl-card{width:86px;height:112px;border-radius:7px;border:2px solid var(--brand);padding:3px;background:#0B0E13;box-shadow:0 0 0 3px rgba(108,148,245,.18),0 8px 22px rgba(0,0,0,.4);position:relative}
+.tpl-card .tpl-thumb{width:100%;height:100%;box-shadow:none;padding:9px 8px;margin:0}
+.tpl-name{font-size:14px;font-weight:600}
+.st-block{margin-bottom:19px}
+.st-block .field-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
+.swatch-row{display:flex;gap:13px;align-items:center}
+.swatch{width:26px;height:26px;border-radius:50%;border:1.5px solid rgba(255,255,255,.18);cursor:pointer;transition:.15s;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.swatch:hover{transform:scale(1.1)}
+.swatch.on{box-shadow:0 0 0 2px #0D1014,0 0 0 4px var(--brand)}
+.rp-select{height:38px;font-size:13px}
+.mm-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px 14px}
+.mm{display:flex;align-items:center;gap:8px}
+.mm label{font-size:12.5px;color:var(--t2);width:16px}
+.mm input{flex:1;min-width:0;height:36px;background:var(--bg-input);border:1px solid var(--line-2);border-radius:var(--r);text-align:center;font-size:13px;padding:0 8px;outline:none}
+.mm input:focus{border-color:var(--brand-line);box-shadow:0 0 0 3px rgba(108,148,245,.14)}
+.mm em{font-style:normal;font-size:11.5px;color:var(--t3);width:17px}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:11.5px 0;font-size:13.5px;font-weight:500;color:var(--t1)}
+
+/* 右侧 AI / JD 通用 */
+.ai-head{display:flex;align-items:flex-start;gap:11px;margin-bottom:18px}
+.ai-badge{width:34px;height:34px;border-radius:9px;background:var(--brand-bg);border:1px solid var(--brand-line);display:grid;place-items:center;font-size:12px;font-weight:750;color:var(--brand-2);letter-spacing:.04em;flex:none}
+.ai-head .ah-t{font-size:18px;font-weight:650;display:flex;align-items:center;gap:10px;line-height:1.3}
+.ai-head .ah-x{margin-left:auto;width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--t3)}
+.ai-head .ah-x:hover{background:rgba(255,255,255,.06);color:var(--t1)}
+.ai-head .ah-x .ic{width:16px;height:16px}
+.ai-head .ah-s{font-size:12px;color:var(--t3);margin-top:3px}
+.jd-ic{background:rgba(108,148,245,.12);border:1px solid var(--brand-line);color:var(--brand-2)}
+.jd-ic .ic{width:18px;height:18px}
+
+.kv{display:flex;align-items:baseline;gap:14px;padding:11px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.kv .k{color:var(--t2);width:72px;flex:none;font-size:13px}
+.kv .v{color:var(--t1);font-weight:500}
+.sec-label{font-size:14px;font-weight:650;margin:20px 0 11px;display:flex;align-items:center;gap:9px}
+.sec-label::after{content:"";flex:1;height:1px;background:var(--line)}
+.sec-label.no-line::after{display:none}
+.tag-pill{font-size:11px;font-weight:550;padding:2.5px 8px;border-radius:6px}
+.tag-neutral{background:#1E252F;color:var(--t2);border:1px solid var(--line)}
+.tag-warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
+.cbox{background:#0F131A;border:1px solid var(--line);border-radius:10px;padding:13px 14px;font-size:13px;line-height:1.75;color:var(--t2)}
+.lock-note{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--t3);margin-top:10px}
+.lock-note .ic{width:14px;height:14px}
+
+/* 生成进度 */
+.prog{margin-top:14px;display:flex;flex-direction:column;gap:16px;padding:4px 2px}
+.prog li{display:flex;align-items:center;gap:12px;list-style:none;font-size:13.5px;color:var(--t3);font-weight:500}
+.p-ck{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;flex:none}
+.p-ck.done{background:var(--ok);color:#08301F}
+.p-ck.done .ic{width:13px;height:13px;stroke-width:3}
+.p-ck.run{background:transparent;color:var(--brand)}
+.p-ck.idle{background:#222831;color:var(--t4)}
+.p-ck.idle .ic{width:13px;height:13px}
+.prog li.done{color:var(--t1)}
+.prog li.run{color:var(--t1)}
+.spinner{width:20px;height:20px;border-radius:50%;border:2px solid rgba(108,148,245,.25);border-top-color:var(--brand);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.info-line{display:flex;gap:9px;font-size:12.5px;color:var(--t3);line-height:1.6;margin-top:18px}
+.info-line .ic{width:15px;height:15px;color:var(--t3);flex:none;margin-top:2px}
+.rpanel-foot{position:absolute;left:0;right:0;bottom:0;padding:16px 22px 18px;background:linear-gradient(180deg,rgba(13,16,20,0),var(--bg-panel) 20%);display:flex;gap:11px}
+.rpanel-foot .btn{flex:1;height:42px;font-size:13.5px}
+.rpanel-foot .btn.grow2{flex:1.35}
+
+/* AI 对比 */
+.diff-line{display:inline;background:rgba(240,166,59,.16);color:#F3C37A;outline:1px solid rgba(240,166,59,.5);outline-offset:1px;border-radius:4px;padding:0 3px}
+.diff-add{background:rgba(53,208,152,.16);color:#7FE3BD;outline:1px solid rgba(53,208,152,.5)}
+.diff-del{background:rgba(242,96,107,.14);color:#F59AA2;text-decoration:line-through;text-decoration-color:rgba(242,96,107,.6);outline:1px solid rgba(242,96,107,.45)}
+.mini-tag{font-size:10.5px;font-weight:600;padding:1.5px 6px;border-radius:5px;margin:0 2px;vertical-align:1px}
+.mini-tag.rep{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line)}
+.mini-tag.add{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-line)}
+.mini-tag.del{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad-line)}
+.legend{display:flex;gap:14px;margin-top:11px;flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--t3)}
+.lg-sw{width:14px;height:11px;border-radius:3px}
+.lg-sw.add{background:var(--ok-bg);border:1.5px solid var(--ok)}
+.lg-sw.del{background:var(--bad-bg);border:1.5px dashed var(--bad)}
+.lg-sw.rep{background:var(--warn-bg);border:1.5px dashed var(--warn)}
+.reasons{margin-top:6px;display:flex;flex-direction:column;gap:11px}
+.reasons li{display:flex;gap:11px;list-style:none;font-size:13px;color:var(--t2);line-height:1.55}
+.reasons .rn{width:20px;height:20px;border-radius:50%;background:#1D232D;border:1px solid var(--line-2);display:grid;place-items:center;font-size:11.5px;font-weight:650;color:var(--t1);flex:none;margin-top:1px}
+.risk{margin-top:16px;border:1px solid var(--warn-line);background:var(--warn-bg);border-radius:11px;padding:14px 15px;display:flex;gap:12px}
+.risk .rk-ic{width:26px;height:26px;border-radius:7px;background:rgba(240,166,59,.18);color:var(--warn);display:grid;place-items:center;flex:none}
+.risk .rk-ic .ic{width:15px;height:15px}
+.risk .rk-t{font-size:13px;font-weight:650;color:var(--warn);margin-bottom:4px}
+.risk p{font-size:12.5px;color:#D8B483;line-height:1.6}
+.risk .btn{margin-top:10px}
+.ai-foot2{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(180deg,rgba(13,16,20,0),var(--bg-panel) 16%);padding:14px 22px 16px}
+.quota-line{font-size:12px;color:var(--t3);text-align:center;margin-bottom:11px}
+.confirm-row{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--t2);margin-bottom:13px}
+.confirm-row .right{margin-left:auto;color:var(--t3);font-size:12px}
+.foot-btns{display:flex;gap:10px}
+.foot-btns .btn{flex:1;height:42px;font-size:13.5px}
+.foot-btns .reg{flex:1.2;flex-direction:column;gap:1px;height:auto;padding:7px 6px;line-height:1.25}
+.foot-btns .reg small{font-size:10.5px;color:var(--t3);font-weight:400}
+
+/* ============================================================
+   JD 面板
+   ============================================================ */
+.jd-body{height:calc(100% - 44px);overflow:hidden;display:flex;flex-direction:column}
+.ta-counter{text-align:right;font-size:11.5px;color:var(--t4);margin-top:6px;font-variant-numeric:tabular-nums}
+.shield-note{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t3);margin-top:10px}
+.shield-note .ic{width:15px;height:15px;color:var(--t3)}
+.chk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px 10px;margin-top:4px}
+.chk-grid label{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--t1);cursor:pointer}
+.jd-foot{position:absolute;left:0;right:0;bottom:0;padding:14px 22px 16px;border-top:1px solid var(--line);background:rgba(13,16,20,.92);display:flex;align-items:center;gap:10px}
+.jd-foot .cost{font-size:12px;color:var(--t3)}
+.jd-foot .btn{height:38px}
+.jd-foot .sp{flex:1}
+
+/* JD 结果 */
+.jd-scroll{height:calc(100% - 0px);overflow:hidden;padding-right:4px}
+.jd-text-box{background:#0F131A;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.7;color:var(--t2)}
+.jd-sub-row{display:flex;align-items:center;margin:8px 0 2px}
+.jd-sub-row .info-line{margin:0;flex:1}
+.match-block{margin-top:17px}
+.mb-head{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;margin-bottom:10px}
+.mb-head .mdot{width:8px;height:8px;border-radius:50%}
+.mdot.g{background:var(--ok);box-shadow:0 0 6px rgba(53,208,152,.6)}
+.mdot.w{background:var(--warn);box-shadow:0 0 6px rgba(240,166,59,.6)}
+.mdot.r{background:var(--bad);box-shadow:0 0 6px rgba(242,96,107,.6)}
+.mb-head .mc{color:var(--t2);font-weight:500}
+.mb-head .mh-d{margin-left:auto;font-size:11.5px;color:var(--t3);font-weight:400}
+.m-card{background:#0F131A;border:1px solid var(--line);border-radius:10px;padding:12px 13px;margin-bottom:9px}
+.m-card .mc-t{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+.m-card .mc-e{font-size:11.5px;color:var(--t3);margin:5px 0 9px;line-height:1.55}
+.mc-badges{display:flex;gap:6px;margin-left:auto}
+.mc-badges span{font-size:10.5px;padding:2px 7px;border-radius:6px;font-weight:550;white-space:nowrap}
+.b-ok{color:var(--ok);background:var(--ok-bg)}
+.b-warn{color:var(--warn);background:var(--warn-bg)}
+.b-bad{color:var(--bad);background:var(--bad-bg)}
+.mc-actions{display:flex;gap:8px;justify-content:flex-end}
+.mc-actions .btn{background:#161B23;border:1px solid var(--line-2);height:28px;font-size:12px;padding:0 12px}
+.mc-actions .btn:hover{background:#1C222C}
+.sug li{display:flex;align-items:center;gap:9px;list-style:none;font-size:12.5px;color:var(--t2);padding:7px 0}
+.sug .rn{width:19px;height:19px;border-radius:50%;background:#1D232D;border:1px solid var(--line-2);display:grid;place-items:center;font-size:11px;font-weight:650;color:var(--t1);flex:none}
+.sug .sp{flex:1}
+.tag-ok{background:var(--bad-bg);color:var(--bad);border:1px solid var(--bad-line);font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:6px}
+.tag-warn2{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line);font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:6px}
+.skill-tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+.skill-tags span{font-size:12px;background:#161B23;border:1px solid var(--line-2);border-radius:7px;padding:4px 11px;color:var(--t1)}
+.duties{margin-top:9px;padding-left:2px;display:flex;flex-direction:column;gap:6px}
+.duties li{list-style:none;display:flex;gap:9px;font-size:12.5px;color:var(--t2)}
+.duties .dn{color:var(--t3);font-weight:600;font-variant-numeric:tabular-nums}
+.jd-two{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;margin-top:4px}
+.jd-two h4{font-size:13px;font-weight:650;margin-bottom:2px}
+
+/* ============================================================
+   弹窗
+   ============================================================ */
+.overlay{position:absolute;inset:0;background:rgba(5,7,10,.64);backdrop-filter:blur(7px) saturate(.92);z-index:30;display:flex;align-items:center;justify-content:center}
+.modal{width:500px;max-height:836px;background:linear-gradient(180deg,#151922,#10141B);border:1px solid var(--line-2);border-radius:var(--r-m);box-shadow:var(--sh-modal);overflow:hidden;display:flex;flex-direction:column}
+.modal.sm{width:428px}
+.modal-head{display:flex;gap:14px;align-items:flex-start;padding:23px 24px 18px}
+.modal-head .mh-ic{width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line-2);display:grid;place-items:center;color:var(--t1);flex:none}
+.modal-head .mh-ic .ic{width:20px;height:20px}
+.modal-head h3{font-size:19px;font-weight:700;letter-spacing:-.005em}
+.modal-head p{font-size:12.5px;color:var(--t3);margin-top:4px;line-height:1.55}
+.modal-head .m-x{margin-left:auto;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--t3);flex:none}
+.modal-head .m-x:hover{background:rgba(255,255,255,.07);color:var(--t1)}
+.modal-head .m-x .ic{width:16px;height:16px}
+.modal-body{padding:4px 24px 8px;overflow:auto}
+.modal-foot{margin-top:auto;padding:16px 24px 20px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.m-field{margin-bottom:16px}
+.m-field-label{font-size:13px;font-weight:600;margin-bottom:9px}
+.name-valid{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ok);font-weight:500;margin-top:9px}
+.name-valid .ic{width:14px;height:14px}
+.m-two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.m-stat{display:grid;grid-template-columns:1fr 1px 1fr;background:#0E1218;border:1px solid var(--line);border-radius:11px;padding:16px 0;margin:4px 0 20px}
+.m-stat .ms{text-align:center}
+.m-stat .ms .l{font-size:12px;color:var(--t3);margin-bottom:6px}
+.m-stat .ms .n{font-size:24px;font-weight:700;letter-spacing:-.01em}
+.m-stat .ms .n small{font-size:13px;font-weight:600;color:var(--t2);margin-left:2px}
+.m-stat .div{background:var(--line-2)}
+.check-list{display:flex;flex-direction:column;gap:12px;margin:6px 0 4px}
+.check-list li{list-style:none;display:flex;align-items:center;gap:11px;font-size:13px;color:var(--t1)}
+.cl-ck{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--ok-line);color:var(--ok);display:grid;place-items:center;flex:none;background:var(--ok-bg)}
+.cl-ck .ic{width:11px;height:11px;stroke-width:3}
+.m-row{display:flex;align-items:center;gap:13px;padding:14px 0;border-bottom:1px solid var(--line)}
+.m-row:last-child{border-bottom:none}
+.m-row .mr-ic{width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid var(--line);display:grid;place-items:center;color:var(--t1);flex:none}
+.m-row .mr-ic .ic{width:17px;height:17px}
+.m-row .mr-t{font-size:13.5px;font-weight:600}
+.m-row .mr-d{font-size:12px;color:var(--t3);margin-top:2px}
+.m-row .mr-r{margin-left:auto;font-size:12.5px;color:var(--brand-2);font-weight:500;cursor:pointer}
+.gen-fail{border:1px solid var(--bad-line);background:var(--bad-bg);border-radius:11px;padding:14px 15px;display:flex;gap:12px;align-items:flex-start;margin:4px 0 0}
+.gen-fail .gf-ic{width:26px;height:26px;border-radius:7px;background:rgba(242,96,107,.18);color:var(--bad);display:grid;place-items:center;flex:none}
+.gen-fail .gf-ic .ic{width:15px;height:15px}
+.gen-fail .gf-t{font-size:13px;font-weight:650;color:var(--bad)}
+.gen-fail p{font-size:12.5px;color:#E4929A;line-height:1.6;margin-top:3px}
+.gen-fail .gf-r{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:none}
+.gen-fail .gf-r .time{font-size:11px;color:var(--t3)}
+.modal .info-line{margin:14px 0 4px}
+.foot-hint{font-size:11.5px;color:var(--t3);position:absolute;transform:translateY(-30px);right:24px}
+.modal-foot .sp{flex:1}
+
+/* 分享弹窗 */
+.share-url{display:flex;gap:10px}
+.share-url .input{flex:1;font-size:12.5px}
+.copied{text-align:right;font-size:12px;color:var(--ok);font-weight:550;margin-top:8px;display:flex;align-items:center;gap:5px;justify-content:flex-end}
+.copied .ic{width:13px;height:13px}
+.share-warn{display:flex;gap:10px;background:#0F131A;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--t2);line-height:1.6;margin-top:16px}
+.share-warn .ic{width:16px;height:16px;color:var(--t3);flex:none;margin-top:2px}
+.share-foot-l{display:flex;flex-direction:column;gap:3px}
+.share-foot-l button{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:var(--t1);padding:6px 2px}
+.share-foot-l button .ic{width:15px;height:15px}
+.share-foot-l small{font-size:11px;color:var(--t3)}
+.perm{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:550}
+.perm .ic{width:16px;height:16px;color:var(--t2)}
+.exp-date{font-size:12.5px;color:var(--t3);white-space:nowrap;align-self:center}
+</style>
+</head>
+<body>
+
+<nav id="bar">
+  <div class="rb"><span class="dot"></span>简历工作台 · V0.2 视觉参考</div>
+  <button class="tab on" data-go="ov">总览</button>
+  <button class="tab" data-go="s1"><span class="n">1</span>工作台空状态</button>
+  <button class="tab" data-go="s2"><span class="n">2</span>创建简历</button>
+  <button class="tab" data-go="s3"><span class="n">3</span>编辑器默认</button>
+</nav>
+
+<div id="stage">
+<div id="canvas" class="overview">
+
+<!-- ============ 画面 1 · 工作台空状态 ============ -->
+<section class="screen" data-v02 id="s1">
+  <span data-use="topnav"></span>
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h1>我的简历</h1>
+        <p>管理你的简历版本，并继续最近的编辑</p>
+      </div>
+      <button class="btn btn-primary"><i data-ic="plus"></i>新建简历</button>
+    </div>
+    <div class="empty">
+      <div class="e-ic"><i data-ic="file-text"></i></div>
+      <h2>创建你的第一份简历</h2>
+      <p class="e-desc">从真实经历开始填写，在编辑器中持续保存并预览排版结果。</p>
+      <div class="e-btns">
+        <button class="btn btn-primary btn-lg">创建简历</button>
+      </div>
+      <div class="steps">
+        <div class="st"><span class="num">1</span>填写真实经历</div><span class="conn"></span>
+        <div class="st"><span class="num">2</span>自动保存结构化内容</div><span class="conn"></span>
+        <div class="st"><span class="num">3</span>实时预览 A4 排版</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 画面 2 · 创建简历 ============ -->
+<section class="screen" data-v02 id="s2">
+  <span data-use="topnav"></span>
+  <div class="page" style="padding-top:30px">
+    <div class="crumb"><i data-ic="arrow-left"></i>返回我的简历</div>
+    <div class="page-head" style="margin-bottom:22px">
+      <div>
+        <h1>创建简历</h1>
+        <p>选择创建方式并填写基础信息，稍后可在编辑器中继续调整</p>
+      </div>
+    </div>
+    <div class="create-card">
+      <div class="create-col">
+        <div class="col-title">创建方式</div>
+        <div class="col-sub">V0.2 使用固定基础模板</div>
+        <div class="option on">
+          <span class="o-ic"><i data-ic="file-plus"></i></span>
+          <span class="o-main"><div class="o-t">基础模板创建</div><div class="o-d">从核心简历模块开始填写</div></span>
+          <span class="radio"></span>
+        </div>
+        <div class="plain-note"><i data-ic="info"></i>创建方式只影响初始内容，不限制后续编辑</div>
+      </div>
+      <div class="create-col right">
+        <div class="col-title">基础信息</div>
+        <div class="col-sub">这些信息将用于创建初始简历，可随时修改</div>
+        <div class="field">
+          <label class="field-label">简历名称</label>
+          <input class="input" value="张三的简历">
+        </div>
+        <div class="field">
+          <label class="field-label">用户阶段</label>
+          <div class="seg"><button>在校/应届</button><button class="on">在职</button><button>待业</button></div>
+          <div class="seg-help">用于设置默认模块组合，不会限制后续添加内容</div>
+        </div>
+        <div class="field">
+          <label class="field-label">求职方向</label>
+          <input class="input" value="前端开发工程师">
+        </div>
+        <div class="form-row2">
+          <div class="field" style="margin-bottom:14px">
+            <label class="field-label">内容语言</label>
+            <select class="select"><option>简体中文</option></select>
+          </div>
+          <div class="field" style="margin-bottom:14px">
+            <label class="field-label">初始模板</label>
+            <select class="select"><option>简洁单栏</option></select>
+          </div>
+        </div>
+        <div class="tpl-pick">
+          <div class="tpl-thumb"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div>
+            <div class="tp-t">简洁单栏 <span class="tp-check"><i data-ic="check"></i></span></div>
+            <div class="tp-d">清晰、克制，适合技术与产品岗位</div>
+          </div>
+        </div>
+      </div>
+      <div class="create-foot">
+        <span class="foot-note"><i data-ic="lock"></i>简历默认仅自己可见</span>
+        <div class="right">
+          <button class="btn btn-ghost">取消</button>
+          <button class="btn btn-primary">创建并进入编辑器 <i data-ic="arrow-right"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 画面 3 · 编辑器默认状态 ============ -->
+<section class="screen editor" data-v02 id="s3">
+  <span data-use="topbar"></span>
+  <div class="editor-body">
+    <span data-use="railL" data-active="user" data-tip></span>
+    <span data-use="form-info"></span>
+    <main class="stage">
+      <span data-use="paper"></span>
+      <span data-use="zoom"></span>
+    </main>
+    <aside class="rpanel">
+      <div class="fold r"><i data-ic="chevron-left"></i></div>
+      <div class="panel-h"><h2>模板</h2><p>当前版本使用固定的简洁单栏模板</p></div>
+      <div class="tpl-row">
+        <div class="tpl-card"><div class="tpl-thumb"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="tpl-name">简洁单栏</div>
+      </div>
+      <div class="plain-note"><i data-ic="info"></i>排版、设计和页面设置由右侧对应工具进入，所有控件必须实时更新 A4 预览。</div>
+    </aside>
+    <span data-use="railR" data-active="template" data-tip></span>
+  </div>
+</section>
+
+<!-- ============ 画面 4 · AI 优化生成中 ============ -->
+<section class="screen editor" id="s4">
+  <span data-use="topbar"></span>
+  <div class="editor-body">
+    <span data-use="railL" data-active="briefcase"></span>
+    <span data-use="form-info"></span>
+    <main class="stage">
+      <span data-use="paper"></span>
+      <span data-use="zoom"></span>
+    </main>
+    <aside class="rpanel" style="padding-bottom:24px">
+      <div class="ai-head">
+        <span class="ai-badge">AI</span>
+        <div><div class="ah-t">AI 内容优化</div></div>
+        <button class="ah-x"><i data-ic="x"></i></button>
+      </div>
+      <div class="kv"><span class="k">当前模块</span><span class="v">项目经历</span></div>
+      <div class="kv"><span class="k">当前条目</span><span class="v">在线教育平台</span></div>
+      <div class="kv" style="border-bottom:none"><span class="k">优化目标</span><span class="v">突出个人贡献与项目结果</span></div>
+      <div class="sec-label">原始内容</div>
+      <div class="cbox">参与在线教育平台的前端开发，负责课程播放、笔记和评论等功能。</div>
+      <div class="lock-note"><i data-ic="lock"></i>原始内容不会被覆盖</div>
+      <div class="sec-label">生成进度</div>
+      <ul class="prog">
+        <li class="done"><span class="p-ck done"><i data-ic="check"></i></span>正在分析原始内容</li>
+        <li class="run"><span class="spinner"></span>正在识别可强化的信息</li>
+        <li><span class="p-ck idle"><i data-ic="check"></i></span>正在生成修改建议</li>
+      </ul>
+      <div class="info-line"><i data-ic="info"></i>生成完成前不会修改你的简历。</div>
+      <div class="rpanel-foot">
+        <button class="btn btn-dark">取消生成</button>
+        <button class="btn btn-dark is-disabled"><span class="spinner" style="width:14px;height:14px;border-width:2px"></span>正在生成…</button>
+      </div>
+    </aside>
+    <span data-use="railR" data-active="chart"></span>
+  </div>
+</section>
+
+<!-- ============ 画面 5 · AI 修改对比 ============ -->
+<section class="screen editor" id="s5">
+  <span data-use="topbar"></span>
+  <div class="editor-body">
+    <span data-use="railL" data-active="briefcase"></span>
+    <span data-use="form-project"></span>
+    <main class="stage">
+      <span data-use="paper" data-hl="1"></span>
+      <span data-use="zoom"></span>
+    </main>
+    <aside class="rpanel" style="padding:24px 22px 0">
+      <div class="ai-head">
+        <span class="ai-badge">AI</span>
+        <div><div class="ah-t">AI 修改对比</div><div class="ah-s">建议已生成，尚未应用</div></div>
+        <button class="ah-x"><i data-ic="x"></i></button>
+      </div>
+      <div class="kv"><span class="k">当前模块</span><span class="v">项目经历 · 智能运营数据平台</span></div>
+      <div class="kv" style="border-bottom:none"><span class="k">优化目标</span><span class="v">突出个人贡献与结果</span></div>
+      <div class="sec-label no-line" style="margin-bottom:10px">原始内容 <span class="tag-pill tag-neutral">当前版本</span></div>
+      <div class="cbox">负责数据可视化模块的前端开发，使用 React <span class="diff-del">完成多个页面</span><span class="mini-tag del">删除</span>，并参与需求分析与技术方案设计。</div>
+      <div class="sec-label" style="margin-top:18px">AI 建议内容 <span class="tag-pill tag-warn">待确认</span></div>
+      <div class="cbox" style="line-height:2">
+        <span class="diff-line">负责智能运营数据平台的数据可视化模块前端开发，</span><span class="mini-tag rep">替换</span>
+        基于 React<span class="diff-add">交付核心页面并沉淀可复用组件，</span><span class="mini-tag add">新增</span>
+        参与需求分析与技术方案设计，支持后续模块快速迭代。
+      </div>
+      <div class="legend">
+        <span><i class="lg-sw add"></i>新增 增加的内容</span>
+        <span><i class="lg-sw del"></i>删除 删除的内容</span>
+        <span><i class="lg-sw rep"></i>替换 替换的内容</span>
+      </div>
+      <div class="sec-label" style="margin-bottom:4px">修改原因</div>
+      <ul class="reasons">
+        <li><span class="rn">1</span>补充项目对象，使职责范围更明确</li>
+        <li><span class="rn">2</span>突出组件沉淀与协作价值，减少流水账表达</li>
+      </ul>
+      <div class="risk">
+        <span class="rk-ic"><i data-ic="alert"></i></span>
+        <div style="flex:1">
+          <div class="rk-t">事实风险提示</div>
+          <p>“支持后续模块快速迭代”属于结果性表述，当前缺少可验证证据。请确认后再应用，或删除该表述。</p>
+          <button class="btn btn-sm btn-outline-warn">补充事实</button>
+        </div>
+      </div>
+      <div class="ai-foot2">
+        <div class="quota-line">本次生成将消耗 1 次 AI 额度 · 剩余 38 次</div>
+        <div class="confirm-row">
+          <span class="chk"><i data-ic="check"></i></span>我已确认建议内容符合真实经历
+          <span class="right">接受后将创建可撤销版本</span>
+        </div>
+        <div class="foot-btns">
+          <button class="btn btn-dark">拒绝</button>
+          <button class="btn btn-dark reg"><span style="display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:550"><i data-ic="refresh" style="width:14px;height:14px"></i>重新生成</span><small>再次消耗 1 次</small></button>
+          <button class="btn btn-primary is-disabled">接受修改</button>
+        </div>
+      </div>
+    </aside>
+    <span data-use="railR" data-active="chart"></span>
+  </div>
+</section>
+
+<!-- ============ 画面 7 · JD 匹配输入 ============ -->
+<section class="screen editor" id="s7">
+  <span data-use="topbar"></span>
+  <div class="editor-body">
+    <span data-use="railL" data-active="briefcase"></span>
+    <span data-use="form-project"></span>
+    <main class="stage">
+      <span data-use="paper" data-hl="1"></span>
+      <span data-use="zoom"></span>
+    </main>
+    <aside class="rpanel">
+      <div class="ai-head">
+        <span class="ai-badge jd-ic"><i data-ic="file-search"></i></span>
+        <div><div class="ah-t">JD 岗位匹配</div><div class="ah-s">粘贴目标岗位描述，分析简历与岗位的匹配情况</div></div>
+        <button class="ah-x"><i data-ic="x"></i></button>
+      </div>
+      <div class="sec-label no-line" style="margin:2px 0 14px">岗位基本信息</div>
+      <div class="field"><label class="field-label">岗位名称</label><input class="input" value="前端开发工程师"></div>
+      <div class="form-row2" style="gap:14px">
+        <div class="field"><label class="field-label">公司名称（可选）</label><input class="input" placeholder="请输入公司名称"></div>
+        <div class="field"><label class="field-label">招聘平台（可选）</label><input class="input" placeholder="请选择或输入平台"></div>
+      </div>
+      <div class="field">
+        <label class="field-label">岗位描述</label>
+        <textarea class="textarea" style="height:200px" placeholder="粘贴岗位职责、任职要求和加分项……"></textarea>
+        <div class="ta-counter">0 / 10000</div>
+      </div>
+      <div class="shield-note"><i data-ic="shield"></i>请勿粘贴身份证、联系方式等敏感个人信息。</div>
+      <div class="sec-label no-line" style="margin:18px 0 12px">分析范围</div>
+      <div class="chk-grid">
+        <label><span class="chk on"><i data-ic="check"></i></span>岗位职责</label>
+        <label><span class="chk on"><i data-ic="check"></i></span>专业技能</label>
+        <label><span class="chk on"><i data-ic="check"></i></span>项目经验</label>
+        <label><span class="chk on"><i data-ic="check"></i></span>教育要求</label>
+        <label><span class="chk on"><i data-ic="check"></i></span>关键词</label>
+        <label><span class="chk on"><i data-ic="check"></i></span>ATS 基础风险</label>
+      </div>
+      <div class="jd-foot">
+        <span class="cost">预计消耗 1 次 AI 额度</span>
+        <span class="sp"></span>
+        <button class="btn btn-dark">清空</button>
+        <button class="btn btn-primary is-disabled" style="min-width:104px">开始匹配</button>
+      </div>
+    </aside>
+    <span data-use="railR" data-active="target"></span>
+  </div>
+</section>
+
+<!-- ============ 画面 6 · AI 额度不足（弹窗态，背景为 JD 输入） ============ -->
+<section class="screen editor" id="s6">
+  <span data-use="topbar" data-export="off"></span>
+  <div class="editor-body">
+    <span data-use="railL" data-active="briefcase"></span>
+    <span data-use="form-project"></span>
+    <main class="stage">
+      <span data-use="paper"></span>
+      <span data-use="zoom"></span>
+    </main>
+    <aside class="rpanel">
+      <div class="ai-head">
+        <span class="ai-badge jd-ic"><i data-ic="file-search"></i></span>
+        <div><div class="ah-t">JD 岗位匹配</div><div class="ah-s">粘贴目标岗位描述，分析简历与岗位的匹配情况</div></div>
+        <button class="ah-x"><i data-ic="x"></i></button>
+      </div>
+      <div class="sec-label no-line" style="margin:2px 0 14px">岗位基本信息</div>
+      <div class="field"><label class="field-label">岗位名称</label><input class="input" value="前端开发工程师"></div>
+      <div class="form-row2" style="gap:14px">
+        <div class="field"><label class="field-label">公司名称（可选）</label><input class="input" placeholder="请输入公司名称"></div>
+        <div class="field"><label class="field-label">招聘平台（可选）</label><input class="input" placeholder="请选择或输入平台"></div>
+      </div>
+      <div class="field">
+        <label class="field-label">岗位描述</label>
+        <textarea class="textarea" style="height:200px" placeholder="粘贴岗位职责、任职要求和加分项……"></textarea>
+        <div class="ta-counter">0 / 10000</div>
+      </div>
+      <div class="shield-note"><i data-ic="shield"></i>请勿粘贴身份证、联系方式等敏感个人信息。</div>
+      <div class="sec-label no-line" style="margin:18px 0 12px">分析范围</div>
+      <div class="chk-grid">
+        <label><span class="chk on"><i data-ic="check"></i></span>岗位职责</label>
+        <label><span class="chk on"><i data-ic="check"></i></span>专业技能</label>
+        <label><span class="chk on"><i data-ic="check"></i></span>项目经验</label>
+        <label><span class="chk on"><i data-ic="check"></i></span>教育要求</label>
+        <label><span class="chk on"><i data-ic="check"></i></span>关键词</label>
+        <label><span class="chk on"><i data-ic="check"></i></span>ATS 基础风险</label>
+      </div>
+    </aside>
+    <span data-use="railR" data-active="target"></span>
+  </div>
+  <div class="overlay">
+    <div class="modal sm">
+      <div class="modal-head" style="padding-bottom:14px">
+        <div><h3>AI 额度不足</h3><p>当前剩余额度不足以完成本次 JD 匹配。</p></div>
+        <button class="m-x"><i data-ic="x"></i></button>
+      </div>
+      <div class="modal-body" style="padding-top:0">
+        <div class="m-stat">
+          <div class="ms"><div class="l">当前剩余</div><div class="n">0 <small>次</small></div></div>
+          <div class="div"></div>
+          <div class="ms"><div class="l">本次需要</div><div class="n">1 <small>次</small></div></div>
+        </div>
+        <div class="m-field-label">权益说明</div>
+        <ul class="check-list">
+          <li><span class="cl-ck"><i data-ic="check"></i></span>会员包含更多 AI 优化次数</li>
+          <li><span class="cl-ck"><i data-ic="check"></i></span>支持 JD 岗位匹配</li>
+          <li><span class="cl-ck"><i data-ic="check"></i></span>AI 失败不会扣除额度</li>
+        </ul>
+        <div class="info-line" style="margin:14px 0 6px"><i data-ic="info"></i>购买成功后将返回当前任务，已填写内容不会丢失。</div>
+      </div>
+      <div class="modal-foot" style="border:none;flex-direction:column;gap:10px;padding:10px 24px 24px">
+        <button class="btn btn-primary btn-lg" style="width:100%">查看会员方案</button>
+        <button class="btn btn-ghost btn-lg" style="width:100%">购买 AI 次数包</button>
+        <button class="btn" style="width:100%;color:var(--t2)">暂时不用</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 画面 8 · JD 匹配结果 ============ -->
+<section class="screen editor" id="s8">
+  <span data-use="topbar"></span>
+  <div class="editor-body">
+    <span data-use="railL" data-active="briefcase"></span>
+    <span data-use="form-project"></span>
+    <main class="stage">
+      <span data-use="paper" data-hl="1"></span>
+      <span data-use="zoom"></span>
+    </main>
+    <aside class="rpanel" style="padding:22px 20px 0;display:flex;flex-direction:column">
+      <div class="ai-head">
+        <span class="ai-badge jd-ic"><i data-ic="file-search"></i></span>
+        <div><div class="ah-t">JD 匹配</div><div class="ah-s">前端开发工程师 · 分析完成</div></div>
+        <button class="ah-x"><i data-ic="x"></i></button>
+      </div>
+      <div style="flex:1;overflow:hidden">
+        <div class="sec-label no-line" style="margin:0 0 8px">JD 文本</div>
+        <div class="jd-text-box">负责企业级 Web 应用开发，熟悉 React、TypeScript 与前端工程化；具备性能优化、数据可视化和跨团队协作经验。</div>
+        <div class="jd-sub-row" style="margin:10px 0 2px">
+          <div class="info-line" style="margin:0"><i data-ic="info"></i>请勿粘贴敏感个人信息</div>
+          <button class="btn btn-dark btn-sm" style="flex:none;margin-left:10px">开始分析</button>
+        </div>
+        <div class="jd-two">
+          <div>
+            <h4 style="margin-top:12px">岗位核心职责</h4>
+            <ul class="duties">
+              <li><span class="dn">1.</span>企业级 Web 应用开发</li>
+              <li><span class="dn">2.</span>前端性能与工程化建设</li>
+              <li><span class="dn">3.</span>数据可视化及跨团队协作</li>
+            </ul>
+          </div>
+          <div>
+            <h4 style="margin-top:12px">关键技能</h4>
+            <div class="skill-tags">
+              <span>React</span><span>TypeScript</span><span>性能优化</span><span>前端工程化</span><span>数据可视化</span>
+            </div>
+          </div>
+        </div>
+        <div class="match-block">
+          <div class="mb-head"><span class="mdot g"></span>已满足 <span class="mc">2</span><span class="mh-d">已在简历中找到相关证据</span></div>
+          <div class="m-card">
+            <div class="mc-t">React 与 TypeScript 企业应用开发
+              <span class="mc-badges"><span class="b-ok"><span class="mdot g" style="width:6px;height:6px;display:inline-block;margin-right:5px"></span>证据充分</span></span>
+            </div>
+            <div class="mc-e">证据：工作经历 · 远景科技有限公司</div>
+            <div class="mc-actions"><button class="btn">定位内容</button><button class="btn">进入修改</button></div>
+          </div>
+        </div>
+        <div class="match-block">
+          <div class="mb-head"><span class="mdot w"></span>可强化 <span class="mc">1</span><span class="mh-d">已有相关内容，但可进一步完善</span></div>
+          <div class="m-card">
+            <div class="mc-t">前端性能优化成果
+              <span class="mc-badges"><span class="b-warn"><span class="mdot w" style="width:6px;height:6px;display:inline-block;margin-right:5px"></span>可进一步完善</span></span>
+            </div>
+            <div class="mc-e">证据：工作经历 · 页面加载速度提升 40%<br>已有结果，可进一步说明个人贡献</div>
+            <div class="mc-actions"><button class="btn">定位内容</button><button class="btn">进入修改</button></div>
+          </div>
+        </div>
+        <div class="match-block">
+          <div class="mb-head"><span class="mdot r"></span>未证明 <span class="mc">2</span><span class="mh-d">简历中没有事实依据，只能补充真实经历</span></div>
+          <div class="m-card">
+            <div class="mc-t">前端工程化体系建设
+              <span class="mc-badges"><span class="b-bad"><span class="mdot r" style="width:6px;height:6px;display:inline-block;margin-right:5px"></span>需补充事实</span></span>
+            </div>
+            <div class="mc-e">未找到相关证据<br>不会自动生成或写入虚构内容</div>
+            <div class="mc-actions"><button class="btn">定位内容</button><button class="btn">进入修改</button></div>
+          </div>
+          <div class="m-card">
+            <div class="mc-t">跨团队技术推动
+              <span class="mc-badges"><span class="b-bad"><span class="mdot r" style="width:6px;height:6px;display:inline-block;margin-right:5px"></span>需补充事实</span></span>
+            </div>
+            <div class="mc-e">未找到相关证据</div>
+            <div class="mc-actions" style="margin-top:4px"><button class="btn">进入修改</button></div>
+          </div>
+        </div>
+        <div class="match-block" style="margin-top:15px">
+          <div class="sec-label no-line" style="margin:0 0 6px">修改建议</div>
+          <ul class="sug">
+            <li><span class="rn">1</span>强化性能优化条目中的个人动作 <span class="tag-ok">优先</span><span class="sp"></span><button class="btn btn-xs btn-dark">定位内容</button><button class="btn btn-xs btn-dark">进入修改</button></li>
+            <li><span class="rn">2</span>补充工程化相关事实后再生成表达 <span class="tag-warn2">待补充</span><span class="sp"></span><button class="btn btn-xs btn-dark">定位内容</button><button class="btn btn-xs btn-dark">进入修改</button></li>
+          </ul>
+          <div class="info-line" style="margin:10px 0 0"><i data-ic="info"></i>建议仅用于定位问题，应用前需由你确认</div>
+        </div>
+      </div>
+    </aside>
+    <span data-use="railR" data-active="target"></span>
+  </div>
+</section>
+
+<!-- ============ 画面 9 · 导出 PDF 弹窗 ============ -->
+<section class="screen editor" id="s9">
+  <span data-use="topbar" data-export="off"></span>
+  <div class="editor-body">
+    <span data-use="railL" data-active="user"></span>
+    <span data-use="form-info"></span>
+    <main class="stage">
+      <span data-use="paper"></span>
+      <span data-use="zoom"></span>
+    </main>
+    <aside class="rpanel">
+      <div class="fold r"><i data-ic="chevron-left"></i></div>
+      <div class="panel-h"><h2>模板与样式</h2><p>调整简历的整体视觉与页面设置</p></div>
+      <div class="tpl-row">
+        <div class="tpl-card"><div class="tpl-thumb"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="tpl-name">简洁单栏</div>
+      </div>
+      <div class="st-block">
+        <label class="field-label">主题颜色</label>
+        <div class="swatch-row">
+          <span class="swatch on" style="background:#F1F4F8"></span>
+          <span class="swatch" style="background:#2A2F38"></span>
+          <span class="swatch" style="background:#8A919C"></span>
+          <span class="swatch" style="background:#3E5A80"></span>
+          <span class="swatch" style="background:#C4A18A"></span>
+        </div>
+      </div>
+      <div class="st-block"><label class="field-label">字体选择</label><select class="select rp-select"><option>Noto Sans SC</option></select></div>
+      <div class="st-block"><label class="field-label">字重选择</label><select class="select rp-select"><option>常规 400</option></select></div>
+      <div class="st-block"><label class="field-label">页面格式</label><select class="select rp-select"><option>A4</option></select></div>
+      <div class="st-block">
+        <label class="field-label">页面边距</label>
+        <div class="mm-grid">
+          <div class="mm"><label>上</label><input value="18"><em>mm</em></div>
+          <div class="mm"><label>下</label><input value="18"><em>mm</em></div>
+          <div class="mm"><label>左</label><input value="20"><em>mm</em></div>
+          <div class="mm"><label>右</label><input value="20"><em>mm</em></div>
+        </div>
+      </div>
+      <div class="toggle-row">显示头像<span class="switch"></span></div>
+      <div class="toggle-row">显示联系方式<span class="switch on"></span></div>
+      <div class="toggle-row">显示分隔线<span class="switch on"></span></div>
+    </aside>
+    <span data-use="railR" data-active="template"></span>
+  </div>
+  <div class="overlay">
+    <div class="modal">
+      <div class="modal-head" style="padding-bottom:16px">
+        <span class="mh-ic"><i data-ic="download"></i></span>
+        <div><h3>导出 PDF</h3><p>检查文件信息并生成可下载版本</p></div>
+        <button class="m-x"><i data-ic="x"></i></button>
+      </div>
+      <div class="modal-body" style="padding-top:0">
+        <div class="m-field" style="margin-bottom:14px">
+          <div class="m-field-label">文件名称</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <input class="input" value="张三-前端开发工程师.pdf" style="flex:1">
+            <span class="name-valid" style="margin-top:0;white-space:nowrap"><i data-ic="check-circle"></i>名称有效</span>
+          </div>
+        </div>
+        <div class="m-two">
+          <div class="m-field" style="margin-bottom:14px">
+            <div class="m-field-label">文件格式</div>
+            <select class="select" style="height:40px"><option>PDF</option></select>
+          </div>
+          <div class="m-field" style="margin-bottom:14px">
+            <div class="m-field-label">当前页数</div>
+            <input class="input" value="1 页" disabled style="height:40px">
+          </div>
+        </div>
+        <div class="m-row" style="padding:11px 0">
+          <div class="m-field-label" style="margin:0;width:84px;flex:none">分页检查结果</div>
+          <span class="cl-ck" style="background:var(--ok);color:#08301F;border-color:transparent"><i data-ic="check" style="stroke-width:3;width:11px;height:11px"></i></span>
+          <div><div style="font-size:13.5px;font-weight:600;color:var(--ok);display:flex;align-items:center;gap:7px"><span class="mdot g" style="width:7px;height:7px"></span>检查通过</div><div style="font-size:12px;color:var(--t3);margin-top:2px">未发现内容裁切、空白页或异常分页</div></div>
+        </div>
+        <div class="m-row" style="padding:11px 0">
+          <span class="mr-ic"><i data-ic="crown"></i></span>
+          <div><div class="mr-t">专业版 · 可导出</div><div class="mr-d">本月剩余 8 次 PDF 导出</div></div>
+          <span class="mr-r">查看权益</span>
+        </div>
+        <div class="m-row" style="display:block;padding:12px 0">
+          <div class="m-field-label" style="margin-bottom:11px">导出前检查</div>
+          <ul class="check-list" style="gap:10px">
+            <li><span class="cl-ck"><i data-ic="check"></i></span>中文字体已嵌入</li>
+            <li><span class="cl-ck"><i data-ic="check"></i></span>页面尺寸为 A4</li>
+            <li><span class="cl-ck"><i data-ic="check"></i></span>预览与导出内容一致</li>
+          </ul>
+        </div>
+        <div class="m-field-label" style="margin:14px 0 9px">生成状态</div>
+        <div class="gen-fail">
+          <span class="gf-ic"><i data-ic="alert"></i></span>
+          <div style="flex:1"><div class="gf-t">生成失败</div><p>中文字体嵌入超时，未生成可下载文件。额度未扣减。</p></div>
+          <div class="gf-r">
+            <button class="btn btn-sm btn-dark"><i data-ic="refresh"></i>重试</button>
+            <span class="time">刚刚</span>
+          </div>
+        </div>
+        <div class="info-line"><i data-ic="info"></i>重新生成期间可以继续编辑，完成后会在此提供下载</div>
+      </div>
+      <div class="modal-foot">
+        <span class="foot-hint">生成成功后可下载</span>
+        <button class="btn btn-ghost">取消</button>
+        <button class="btn btn-dark is-disabled"><i data-ic="download"></i>下载</button>
+        <span class="sp"></span>
+        <button class="btn btn-primary"><i data-ic="file-text"></i>生成 PDF</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 画面 10 · 分享简历弹窗 ============ -->
+<section class="screen editor" id="s10">
+  <span data-use="topbar" data-export="off"></span>
+  <div class="editor-body">
+    <span data-use="railL" data-active="user"></span>
+    <span data-use="form-info"></span>
+    <main class="stage">
+      <span data-use="paper"></span>
+      <span data-use="zoom"></span>
+    </main>
+    <aside class="rpanel">
+      <div class="fold r"><i data-ic="chevron-left"></i></div>
+      <div class="panel-h"><h2>模板与样式</h2><p>调整简历的整体视觉与页面设置</p></div>
+      <div class="tpl-row">
+        <div class="tpl-card"><div class="tpl-thumb"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="tpl-name">简洁单栏</div>
+      </div>
+      <div class="st-block">
+        <label class="field-label">主题颜色</label>
+        <div class="swatch-row">
+          <span class="swatch on" style="background:#F1F4F8"></span>
+          <span class="swatch" style="background:#2A2F38"></span>
+          <span class="swatch" style="background:#8A919C"></span>
+          <span class="swatch" style="background:#3E5A80"></span>
+          <span class="swatch" style="background:#C4A18A"></span>
+        </div>
+      </div>
+      <div class="st-block"><label class="field-label">字体选择</label><select class="select rp-select"><option>Noto Sans SC</option></select></div>
+      <div class="st-block"><label class="field-label">字重选择</label><select class="select rp-select"><option>常规 400</option></select></div>
+      <div class="st-block"><label class="field-label">页面格式</label><select class="select rp-select"><option>A4</option></select></div>
+      <div class="st-block">
+        <label class="field-label">页面边距</label>
+        <div class="mm-grid">
+          <div class="mm"><label>上</label><input value="18"><em>mm</em></div>
+          <div class="mm"><label>下</label><input value="18"><em>mm</em></div>
+          <div class="mm"><label>左</label><input value="20"><em>mm</em></div>
+          <div class="mm"><label>右</label><input value="20"><em>mm</em></div>
+        </div>
+      </div>
+      <div class="toggle-row">显示头像<span class="switch"></span></div>
+      <div class="toggle-row">显示联系方式<span class="switch on"></span></div>
+      <div class="toggle-row">显示分隔线<span class="switch on"></span></div>
+    </aside>
+    <span data-use="railR" data-active="template"></span>
+  </div>
+  <div class="overlay">
+    <div class="modal" style="width:492px">
+      <div class="modal-head" style="padding-bottom:16px">
+        <span class="mh-ic"><i data-ic="share"></i></span>
+        <div><h3>分享简历</h3><p>创建一个可随时关闭的只读链接</p></div>
+        <button class="m-x"><i data-ic="x"></i></button>
+      </div>
+      <div class="modal-body" style="padding-top:2px">
+        <div class="m-row" style="padding:13px 0">
+          <div><div style="font-size:14px;font-weight:600">开启分享链接</div><div class="mr-d">关闭后旧链接将立即失效</div></div>
+          <span style="margin-left:auto;display:flex;align-items:center;gap:11px;font-size:12.5px;color:var(--t2);font-weight:500">已开启<span class="switch on"></span></span>
+        </div>
+        <div class="m-row" style="padding:13px 0">
+          <div><div style="font-size:14px;font-weight:600">访问权限</div><div class="mr-d">访客无法修改原简历</div></div>
+          <span style="margin-left:auto" class="perm"><i data-ic="eye"></i>只读预览 <i data-ic="chevron-down" style="width:14px;height:14px;color:var(--t3)"></i></span>
+        </div>
+        <div class="m-row" style="padding:13px 0">
+          <div style="font-size:14px;font-weight:600">链接有效期</div>
+          <span style="margin-left:auto;display:flex;align-items:center;gap:13px">
+            <select class="select" style="height:38px;width:168px"><option>7 天后失效</option></select>
+            <span class="exp-date">2026.09.23 23:59</span>
+          </span>
+        </div>
+        <div class="m-row" style="padding:13px 0">
+          <div><div style="font-size:14px;font-weight:600">允许下载</div><div class="mr-d">访客可以下载当前 PDF 版本</div></div>
+          <span class="switch" style="margin-left:auto"></span>
+        </div>
+        <div class="m-field-label" style="margin:14px 0 9px">分享链接</div>
+        <div class="share-url">
+          <input class="input" value="https://resume.example/s/7HF2K9">
+          <button class="btn btn-primary" style="white-space:nowrap"><i data-ic="file-text"></i>复制链接</button>
+        </div>
+        <div class="copied"><i data-ic="check"></i>已复制</div>
+        <div class="share-warn"><i data-ic="info"></i>任何获得链接的人都可以查看，请谨慎分享</div>
+      </div>
+      <div class="modal-foot" style="margin-top:16px">
+        <div class="share-foot-l">
+          <button><i data-ic="link2"></i>关闭分享</button>
+          <small>关闭后旧链接将立即失效</small>
+        </div>
+        <span class="sp"></span>
+        <button class="btn btn-ghost">取消</button>
+        <button class="btn btn-primary" style="min-width:76px">完成</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!--SCREENS-->
+</div>
+</div>
+
+<!-- 复用模板 -->
+<template id="tpl-topnav">
+  <header class="topnav">
+    <div class="brand"><span class="logo"><i data-ic="file-text"></i></span>简历工作台</div>
+    <nav class="nav-links">
+      <a class="on">我的简历</a><a>最近删除</a><a>账户</a>
+    </nav>
+    <div class="nav-right">
+      <div class="avatar-cluster"><span class="avatar">张</span><i data-ic="chevron-down" class="ic" style="width:14px"></i></div>
+    </div>
+  </header>
+</template>
+
+<template id="tpl-topbar">
+  <div class="topbar" style="position:relative">
+    <button class="tb-back"><i data-ic="arrow-left"></i>返回工作台</button>
+    <div class="tb-title">张三的简历 <i data-ic="pen"></i></div>
+    <div class="tb-save"><i data-ic="check-circle"></i>已保存</div>
+    <div class="tb-act">
+      <button class="ab"><i data-ic="undo"></i>撤销</button>
+      <button class="ab"><i data-ic="redo"></i>重做</button>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-railL">
+  <nav class="rail"></nav>
+</template>
+
+<template id="tpl-railR">
+  <nav class="rail right"></nav>
+</template>
+
+<template id="tpl-zoom">
+  <div class="zoom">
+    <button><i data-ic="minus"></i></button>
+    <span class="zv">90%</span>
+    <button><i data-ic="plus"></i></button>
+    <span class="zdiv"></span>
+    <button class="fit">适合页面</button>
+  </div>
+</template>
+
+<template id="tpl-form-info">
+  <aside class="lpanel">
+    <div class="fold l"><i data-ic="chevron-right"></i></div>
+    <div class="panel-h"><h2>基本信息</h2><p>完善你的联系方式与个人介绍</p></div>
+    <div class="fgrid">
+      <div class="field"><label class="field-label">姓名</label><input class="input" value="张三"></div>
+      <div class="field"><label class="field-label">求职岗位</label><input class="input" value="前端开发工程师"></div>
+      <div class="field"><label class="field-label">手机号</label><input class="input" value="138 0013 8000"></div>
+      <div class="field"><label class="field-label">邮箱</label><input class="input" value="zhangsan@example.com"></div>
+      <div class="field"><label class="field-label">所在城市</label><input class="input" value="上海"></div>
+      <div class="field"><label class="field-label">个人网站</label><input class="input" value="zhangsan.dev"></div>
+      <div class="field full"><label class="field-label">个人简介</label><textarea class="textarea">3 年前端开发经验，专注于复杂业务系统与高质量用户体验。&#10;擅长 React、TypeScript 与性能优化。</textarea></div>
+    </div>
+    <div class="lpanel-foot">
+      <button class="btn"><i data-ic="plus"></i>新增模块</button>
+      <button class="btn"><i data-ic="sliders"></i>模块排序</button>
+    </div>
+  </aside>
+</template>
+
+<template id="tpl-form-project">
+  <aside class="lpanel">
+    <div class="fold l"><i data-ic="chevron-right"></i></div>
+    <div class="panel-h"><h2>项目经历</h2><p class="p-sub">管理你的项目经历，展示实际工作成果</p></div>
+    <div style="margin-top:20px;background:#0F1319;border:1px solid var(--line);border-radius:12px;overflow:hidden">
+      <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)">
+        <span style="font-size:14px;font-weight:600">智能运营数据平台</span>
+        <i data-ic="chevron-up" style="margin-left:auto;width:16px;height:16px;color:var(--t3)"></i>
+      </div>
+      <div style="padding:16px">
+        <div class="field"><label class="field-label">项目名称</label><input class="input" value="智能运营数据平台"></div>
+        <div class="field"><label class="field-label">角色</label><input class="input" value="核心开发"></div>
+        <div class="field"><label class="field-label">项目时间</label>
+          <div style="position:relative"><input class="input" value="2023.01 – 2023.06" style="padding-right:36px"><i data-ic="calendar" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--t3)"></i></div>
+        </div>
+        <div class="field" style="margin-bottom:0"><label class="field-label">项目描述</label><textarea class="textarea" style="height:108px">负责数据可视化模块的前端开发，使用 React
+完成多个页面，并参与需求分析与技术方案设计。</textarea></div>
+      </div>
+    </div>
+    <div class="lpanel-foot">
+      <button class="btn"><i data-ic="plus"></i>新增模块</button>
+      <button class="btn"><i data-ic="sliders"></i>模块排序</button>
+    </div>
+  </aside>
+</template>
+
+<template id="tpl-paper">
+  <div class="paper">
+    <div class="p-name">张三</div>
+    <div class="p-role">前端开发工程师</div>
+    <div class="p-contact">
+      <span><i data-ic="phone"></i>138 0013 8000</span>
+      <span><i data-ic="mail"></i>zhangsan@example.com</span>
+      <span><i data-ic="map-pin"></i>上海</span>
+      <span><i data-ic="link2"></i>zhangsan.dev</span>
+    </div>
+    <div class="p-sec">
+      <h3>个人简介</h3>
+      <p>3 年前端开发经验，专注于复杂业务系统与高质量用户体验。擅长 React、TypeScript 与性能优化。</p>
+    </div>
+    <div class="p-sec">
+      <h3>教育背景</h3>
+      <div class="p-meta"><b>华东理工大学</b><i></i>计算机科学与技术<i></i>本科<i></i>2018.09 – 2022.06</div>
+    </div>
+    <div class="p-sec">
+      <h3>工作经历</h3>
+      <div class="p-meta"><b>远景科技有限公司</b><i></i>前端开发工程师<i></i>2022.07 – 至今</div>
+      <ul>
+        <li>负责公司核心业务系统的前端开发与维护，基于 React + TypeScript 构建高可维护的企业级应用。</li>
+        <li>通过性能优化与工程化改进，提升页面加载速度 40%，显著改善用户体验。</li>
+      </ul>
+    </div>
+    <div class="p-sec sec-project">
+      <h3>项目经历</h3>
+      <div class="p-meta"><b>智能运营数据平台</b><i></i>核心开发<i></i>2023.01 – 2023.06</div>
+      <ul>
+        <li>负责数据可视化模块的前端开发，使用 React + Ant Design 实现多维度数据展示与交互。</li>
+        <li>参与需求分析与技术方案设计，完成从 0 到 1 的项目落地。</li>
+      </ul>
+    </div>
+    <div class="p-sec">
+      <h3>专业技能</h3>
+      <div class="p-skills">React / TypeScript / JavaScript / HTML / CSS / Git</div>
+    </div>
+  </div>
+</template>
+
+<script>
+/* ---------- 图标库 ---------- */
+const IC={
+"file-text":'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/>',
+search:'<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+plus:'<path d="M12 5v14M5 12h14"/>',bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+"chevron-down":'<path d="m6 9 6 6 6-6"/>',"chevron-up":'<path d="m18 15-6-6-6 6"/>',"chevron-left":'<path d="m15 18-6-6 6-6"/>',"chevron-right":'<path d="m9 18 6-6-6-6"/>',
+crown:'<path d="M11.56 3.27a.5.5 0 0 1 .88 0l2.95 5.6a1 1 0 0 0 1.52.29l4.27-3.66a.5.5 0 0 1 .8.52l-2.84 10.25a1 1 0 0 1-.95.73H5.81a1 1 0 0 1-.96-.73L2.02 6.02a.5.5 0 0 1 .8-.52l4.27 3.66a1 1 0 0 0 1.52-.29z"/><path d="M5 21h14"/>',
+"arrow-left":'<path d="M19 12H5m7-7-7 7 7 7"/>',"arrow-right":'<path d="M5 12h14m-7-7 7 7-7 7"/>',
+check:'<path d="M20 6 9 17l-5-5"/>',x:'<path d="M18 6 6 18M6 6l12 12"/>',
+file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+"file-plus":'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 12v6M9 15h6"/>',
+grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>',
+lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+info:'<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
+"check-circle":'<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+undo:'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>',redo:'<path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 15-6.7L21 13"/>',
+share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>',
+download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+user:'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+target:'<circle cx="12" cy="12" r="9"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
+book:'<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-4 0 3 3 0 0 0-4 0z"/>',
+grad:'<path d="M22 10 12 5 2 10l10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/><path d="M22 10v6"/>',
+briefcase:'<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+layers:'<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>',
+award:'<circle cx="12" cy="8" r="6"/><path d="M15.5 13 17 22l-5-3-5 3 1.5-9"/>',
+star:'<path d="m12 2 3 7 7 .5-5.5 4.5 2 7.5L12 17.5 5.5 21.5l2-7.5L2 9.5 9 9z"/>',
+message:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+minus:'<path d="M5 12h14"/>',
+template:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
+type:'<path d="M4 7V4h16v3"/><path d="M9 20h6M12 4v16"/>',
+pen:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+chart:'<path d="M3 3v18h18"/><path d="M7 16v-5M12 16V8M17 16v-9"/>',
+refresh:'<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+alert:'<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+link2:'<path d="M9 17H7a5 5 0 0 1 0-10h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><path d="M8 12h8"/>',
+link:link2,
+calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
+"map-pin":'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>',
+sliders:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/>',
+"file-search":'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6"/><path d="M14 2v6h6"/><circle cx="16.5" cy="16.5" r="3.5"/><path d="m20 20 1.6 1.6"/>'
+};
+function hydrateIcons(root){
+  root.querySelectorAll('[data-ic]').forEach(el=>{
+    const d=el.getAttribute('data-ic');
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('viewBox','0 0 24 24');
+    svg.classList.add('ic');
+    svg.innerHTML=IC[d]||'';
+    el.replaceWith(svg);
+  });
+}
+
+/* ---------- 模板装配 ---------- */
+const RAIL_L=[["user","基本信息"],["target"],["book"],["grad"],["briefcase"],["layers"],["award"],["star"],["message"]];
+const RAIL_R=[["template","模板"],["grid","模块"],["type","排版"],["pen","设计"],["file","页面"]];
+function tpl(id){return document.getElementById('tpl-'+id).content.firstElementChild}
+function mount(host,tplId,cb){
+  const node=tpl(tplId).cloneNode(true);
+  if(cb)cb(node,host);
+  host.replaceWith(node);
+  return node;
+}
+function buildRail(node,items,active,tipOn){
+  items.forEach((it,i)=>{
+    const b=document.createElement('button');
+    b.className='rail-btn'+(it[0]===active?' on':'');
+    b.innerHTML=`<i data-ic="${it[0]}"></i>`;
+    if(it[0]==='chart')b.innerHTML+='<span class="rdot g"></span>';
+    if(it[0]==='target')b.innerHTML+='<span class="rdot o"></span>';
+    if(tipOn&&it[1])b.innerHTML+=`<span class="rail-tip">${it[1]}</span>`;
+    node.appendChild(b);
+  });
+}
+function hydrateTemplates(){
+  document.querySelectorAll('[data-use]').forEach(host=>{
+    const u=host.dataset.use;
+    if(u==='railL')mount(host,'railL',n=>buildRail(n,RAIL_L,host.dataset.active||'user',host.dataset.tip!==undefined));
+    else if(u==='railR')mount(host,'railR',n=>buildRail(n,RAIL_R,host.dataset.active||'template',host.dataset.tip!==undefined));
+    else if(u==='paper'){const n=mount(host,'paper');if(host.dataset.hl)n.classList.add('hl-project');}
+    else if(u==='topbar'){const n=mount(host,'topbar');if(host.dataset.export==='off'){const b=n.querySelector('.t-export');if(b){b.classList.add('is-disabled');b.classList.remove('btn-primary');b.style.background='rgba(255,255,255,.08)';b.style.color='var(--t2)';b.style.border='1px solid var(--line-2)';}}}
+    else {const sub=host.dataset.sub;const n=mount(host,u);if(sub){const p=n.querySelector('.p-sub');if(p)p.textContent=sub;}}
+  });
+}
+hydrateTemplates();
+hydrateIcons(document);
+
+/* 表单子标题微调（不同文案） */
+document.querySelectorAll('[data-sub]').forEach(el=>el.textContent=el.dataset.sub);
+
+/* ---------- 导航 / 缩放 ---------- */
+const canvas=document.getElementById('canvas'),stage=document.getElementById('stage');
+const CAP={s1:'01 · 工作台空状态',s2:'02 · 创建简历',s3:'03 · 编辑器默认状态'};
+let wrapped=false;
+function wrapOverview(){
+  if(wrapped)return;
+  Array.from(canvas.querySelectorAll('.screen[data-v02]')).forEach(s=>{
+    const w=document.createElement('div');w.className='ov-wrap';
+    const cap=document.createElement('div');cap.className='cap';cap.textContent=CAP[s.id]||'';
+    canvas.insertBefore(w,s);w.appendChild(s);w.appendChild(cap);
+  });
+  wrapped=true;
+}
+function unwrapOverview(){
+  if(!wrapped)return;
+  canvas.querySelectorAll('.ov-wrap').forEach(w=>{
+    const s=w.querySelector('.screen');
+    canvas.insertBefore(s,w);w.remove();
+  });
+  wrapped=false;
+}
+function go(id){
+  document.querySelectorAll('#bar .tab').forEach(t=>t.classList.toggle('on',t.dataset.go===id));
+  canvas.style.transform='';canvas.style.marginBottom='';
+  if(id==='ov'){
+    wrapOverview();
+    canvas.className='overview';
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    stage.style.padding='34px 0 60px';
+    stage.scrollTop=0;
+    return;
+  }
+  unwrapOverview();
+  canvas.className='single';
+  document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));
+  stage.style.padding='28px 0 60px';
+  stage.scrollTop=0;
+  requestAnimationFrame(applyScale);
+}
+function applyScale(){
+  const s=canvas.querySelector('.screen.active');
+  if(!s)return;
+  const avail=stage.clientWidth-48;
+  const k=Math.min(1,avail/1440);
+  canvas.style.transform=`scale(${k})`;
+  canvas.style.marginBottom=(900*(k-1))+'px';
+}
+document.querySelectorAll('#bar .tab').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
+window.addEventListener('resize',()=>{if(canvas.classList.contains('single'))applyScale()});
+go('ov');
+</script>
+</body>
+</html>
