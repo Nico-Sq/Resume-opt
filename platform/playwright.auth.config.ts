@@ -13,7 +13,20 @@ export default defineConfig({
   timeout: 180_000,
   expect: { timeout: 15_000 },
   outputDir: 'artifacts/playwright-auth',
-  reporter: process.env.CI ? [['github'], ['line']] : [['line']],
+  reporter: process.env.CI
+    ? [
+        ['github'],
+        ['line'],
+        [
+          './scripts/ci/sanitized-playwright-reporter.ts',
+          {
+            scope: 'V02-032-real-auth-chrome',
+            outputPath: 'artifacts/ci/playwright-auth.json',
+          },
+        ],
+      ]
+    : [['line']],
+  projects: [{ name: 'real-auth-chrome' }],
   use: {
     baseURL,
     browserName: 'chromium',

@@ -43,14 +43,20 @@ describe('GitHub verification workflow', () => {
     expect(workflow).toContain('path: platform/artifacts/ci');
     expect(workflow).toContain('pnpm ops:restore:native');
     expect(workflow).toContain(
-      '- name: Rehearse native pg_dump and pg_restore\n        if: always()',
+      '- name: Rehearse native pg_dump and pg_restore\n        id: native_restore\n        if: always()',
     );
     expect(workflow).toContain('PG_NATIVE_RESTORE_MODE: docker');
     expect(workflow).toContain('${{ job.services.postgres.id }}');
     expect(workflow).toContain('pnpm db:seed:dev');
-    expect(workflow).toContain('pnpm test:browser');
-    expect(workflow).toContain('Verify fixed and real-auth native Chrome matrices');
+    expect(workflow).toContain('pnpm test:browser:fixed');
+    expect(workflow).toContain('pnpm test:browser:auth');
+    expect(workflow).toContain('Verify fixed-identity native Chrome matrix');
+    expect(workflow).toContain('Verify real-auth native Chrome matrix');
     expect(workflow).toContain('PLAYWRIGHT_CHANNEL: chrome');
+    expect(workflow).toContain('if-no-files-found: error');
+    expect(workflow).toContain('retention-days: 30');
+    expect(workflow).toContain('run: pnpm ci:evidence');
+    expect(workflow).toContain('EVIDENCE_FIXED_BROWSER_OUTCOME');
   });
 
   it('runs every full-gate phase and labels CI performance evidence correctly', async () => {
@@ -67,6 +73,20 @@ describe('GitHub verification workflow', () => {
     expect(fullGate).toContain('--environment ci');
     expect(fullGate).toContain('pnpm ops:restore:rehearse');
     expect(fullGate).toContain('pnpm build');
-    expect(packageJson.scripts['test:browser']).toContain('playwright test');
+    expect(packageJson.scripts['test:browser']).toContain('test:browser:fixed');
+    expect(packageJson.scripts['test:browser']).toContain('test:browser:auth');
+  });
+
+  it('runs native restore and evidence collection even after a browser failure', async () => {
+    const workflow = await readFile(workflowPath, 'utf8');
+    const browserIndex = workflow.indexOf('id: fixed_browser');
+    const restoreIndex = workflow.indexOf('id: native_restore');
+    const manifestIndex = workflow.indexOf('name: Build sanitized verification manifest');
+
+    expect(browserIndex).toBeGreaterThan(0);
+    expect(restoreIndex).toBeGreaterThan(browserIndex);
+    expect(manifestIndex).toBeGreaterThan(restoreIndex);
+    expect(workflow.slice(restoreIndex, manifestIndex)).toContain('if: always()');
+    expect(workflow.slice(manifestIndex)).toContain('if: always()');
   });
 });

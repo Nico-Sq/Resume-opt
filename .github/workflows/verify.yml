@@ -72,10 +72,14 @@ jobs:
           touch .env.local
           pnpm ci:provision
 
-      - name: Run complete V0.1 verification gate
-        run: pnpm ci:full
+      - name: Run complete V0.2 verification gate
+        id: quality
+        run: |
+          pnpm ci:full
+          pnpm test:migrations
 
       - name: Prepare fixed browser-test fixture
+        id: fixture
         env:
           APP_ENV: local
           AUTH_MODE: fixed
@@ -86,17 +90,36 @@ jobs:
           pnpm db:migrate
           pnpm db:seed:dev
 
-      - name: Verify fixed and real-auth native Chrome matrices
+      - name: Verify fixed-identity native Chrome matrix
+        id: fixed_browser
         env:
           PLAYWRIGHT_CHANNEL: chrome
-        run: pnpm test:browser
+        run: pnpm test:browser:fixed
+
+      - name: Verify real-auth native Chrome matrix
+        id: auth_browser
+        if: always() && steps.quality.outcome == 'success' && steps.fixture.outcome == 'success'
+        env:
+          PLAYWRIGHT_CHANNEL: chrome
+        run: pnpm test:browser:auth
 
       - name: Rehearse native pg_dump and pg_restore
+        id: native_restore
         if: always()
         env:
           PG_NATIVE_RESTORE_MODE: docker
           PG_NATIVE_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: pnpm ops:restore:native -- --output artifacts/ci/native-restore.json
+
+      - name: Build sanitized verification manifest
+        if: always()
+        env:
+          EVIDENCE_QUALITY_OUTCOME: ${{ steps.quality.outcome }}
+          EVIDENCE_FIXTURE_OUTCOME: ${{ steps.fixture.outcome }}
+          EVIDENCE_FIXED_BROWSER_OUTCOME: ${{ steps.fixed_browser.outcome }}
+          EVIDENCE_AUTH_BROWSER_OUTCOME: ${{ steps.auth_browser.outcome }}
+          EVIDENCE_NATIVE_RESTORE_OUTCOME: ${{ steps.native_restore.outcome }}
+        run: pnpm ci:evidence
 
       - name: Preserve sanitized verification evidence
         if: always()
@@ -104,5 +127,5 @@ jobs:
         with:
           name: verification-evidence-${{ github.run_id }}
           path: platform/artifacts/ci
-          if-no-files-found: warn
-          retention-days: 14
+          if-no-files-found: error
+          retention-days: 30

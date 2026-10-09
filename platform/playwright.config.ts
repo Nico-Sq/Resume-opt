@@ -20,7 +20,20 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 15_000 },
   outputDir: 'artifacts/playwright',
-  reporter: process.env.CI ? [['github'], ['line']] : [['line']],
+  reporter: process.env.CI
+    ? [
+        ['github'],
+        ['line'],
+        [
+          './scripts/ci/sanitized-playwright-reporter.ts',
+          {
+            scope: 'V02-032-fixed-chrome',
+            outputPath: 'artifacts/ci/playwright-fixed.json',
+          },
+        ],
+      ]
+    : [['line']],
+  projects: [{ name: 'fixed-chrome' }],
   use: {
     baseURL,
     browserName: 'chromium',
