@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { parseDatabaseToolConfig } from '@resume/config/server';
 import { PostgresExpiredResumeCleaner } from '@resume/infrastructure/privacy-cleanup';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
+import { runWithOperationalAlert } from '@resume/infrastructure/operational-alert';
 
 export interface CleanupOptions {
   environment: string;
@@ -69,7 +70,15 @@ export async function runCleanup(options: CleanupOptions) {
 }
 
 async function main() {
-  const report = await runCleanup(parseCleanupOptions(process.argv.slice(2)));
+  const report = await runWithOperationalAlert({
+    type: 'privacy-cleanup-failed',
+    context: {
+      environment: 'test',
+      release: process.env.APP_RELEASE ?? 'local',
+      recipient: 'invoking-operator-stderr',
+    },
+    operation: () => runCleanup(parseCleanupOptions(process.argv.slice(2))),
+  });
   console.log(JSON.stringify(report));
 }
 

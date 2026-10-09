@@ -492,6 +492,27 @@ test.describe.serial('V0.2 双真实账户 Chrome 矩阵', () => {
     );
   });
 
+  test('生产响应启用 CSP 与浏览器安全头且页面无 CSP 违规', async ({ page, browser }) => {
+    browserVersion = browser.version();
+    const violations: string[] = [];
+    page.on('console', (message) => {
+      if (/content security policy/iu.test(message.text())) violations.push(message.text());
+    });
+
+    const response = await page.goto('/login');
+    if (!response) throw new Error('登录页没有返回导航响应');
+    const headers = response.headers();
+    expect(headers['content-security-policy']).toContain("default-src 'self'");
+    expect(headers['content-security-policy']).toContain("object-src 'none'");
+    expect(headers['content-security-policy']).toContain("frame-ancestors 'none'");
+    expect(headers['content-security-policy']).not.toContain('unsafe-eval');
+    expect(headers['x-content-type-options']).toBe('nosniff');
+    expect(headers['x-frame-options']).toBe('DENY');
+    expect(headers['referrer-policy']).toBe('no-referrer');
+    await expect(page.getByRole('heading', { name: '登录' })).toBeVisible();
+    expect(violations).toEqual([]);
+  });
+
   test('A/B 完成真实登录、CRUD、跨账户拒绝、删除恢复与退出', async ({ browser }) => {
     browserVersion = browser.version();
     const contextA = await browser.newContext();

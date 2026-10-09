@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { performance } from 'node:perf_hooks';
 
 import { runMigrations } from '@resume/infrastructure/migrations';
+import { runWithOperationalAlert } from '@resume/infrastructure/operational-alert';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
 import {
   acknowledgeDeletionManifest,
@@ -358,16 +359,26 @@ function argument(name: string, fallback?: string): string | undefined {
 }
 
 async function main() {
-  const connectionString = process.env.PG_TEST_URL;
-  if (!connectionString) throw new Error('缺少 PG_TEST_URL');
-  const report = await rehearseNativeRestore({
-    connectionString,
-    environment: argument('environment', 'test') ?? 'test',
-    mode: process.env.PG_NATIVE_RESTORE_MODE ?? 'local',
-    ...(process.env.PG_NATIVE_POSTGRES_CONTAINER
-      ? { containerId: process.env.PG_NATIVE_POSTGRES_CONTAINER }
-      : {}),
-    migrationsDirectory: resolve(import.meta.dirname, '../../database/migrations'),
+  const report = await runWithOperationalAlert({
+    type: 'backup-restore-failed',
+    context: {
+      environment: 'test',
+      release: process.env.APP_RELEASE ?? 'local',
+      recipient: 'invoking-operator-stderr',
+    },
+    operation: async () => {
+      const connectionString = process.env.PG_TEST_URL;
+      if (!connectionString) throw new Error('缺少 PG_TEST_URL');
+      return rehearseNativeRestore({
+        connectionString,
+        environment: argument('environment', 'test') ?? 'test',
+        mode: process.env.PG_NATIVE_RESTORE_MODE ?? 'local',
+        ...(process.env.PG_NATIVE_POSTGRES_CONTAINER
+          ? { containerId: process.env.PG_NATIVE_POSTGRES_CONTAINER }
+          : {}),
+        migrationsDirectory: resolve(import.meta.dirname, '../../database/migrations'),
+      });
+    },
   });
   const outputPath = resolve(
     argument('output', `artifacts/test/restore/${report.runId}/native-restore-report.json`) ?? '',

@@ -11,6 +11,11 @@ import { PostgresDialect } from 'kysely';
 import type { Pool } from 'pg';
 
 import {
+  reportOperationalFailure,
+  type OperationalAlertContext,
+  type OperationalAlertReceiver,
+} from '../observability/operational-alert';
+import {
   BETTER_AUTH_ENDPOINTS,
   betterAuthCoreOptions,
   createBetterAuthOptions,
@@ -57,12 +62,20 @@ export interface BetterAuthServerOptions {
   sendResetPassword: SendResetPassword;
   mailTimeoutMs?: number;
   schemaName?: string;
+  operationalAlerts?: {
+    context: OperationalAlertContext;
+    receiver: OperationalAlertReceiver;
+  };
 }
 
 const EMAIL_VERIFICATION_PREFIX = 'resume-opt:verify-email:';
 const DEFAULT_MAIL_TIMEOUT_MS = 5_000;
 
-async function deliverWithTimeout(delivery: Promise<void>, timeoutMs: number): Promise<void> {
+async function deliverWithTimeout(
+  delivery: Promise<void>,
+  timeoutMs: number,
+  onFailure: () => Promise<void>,
+): Promise<void> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
@@ -74,6 +87,7 @@ async function deliverWithTimeout(delivery: Promise<void>, timeoutMs: number): P
       }),
     ]);
   } catch {
+    await onFailure();
     throw new Error('邮件发送失败');
   } finally {
     if (timeout) clearTimeout(timeout);
@@ -82,6 +96,18 @@ async function deliverWithTimeout(delivery: Promise<void>, timeoutMs: number): P
 
 export function createBetterAuthServer(options: BetterAuthServerOptions) {
   const mailTimeoutMs = options.mailTimeoutMs ?? DEFAULT_MAIL_TIMEOUT_MS;
+  const operationalAlerts = options.operationalAlerts;
+  const reportMailFailure = operationalAlerts
+    ? () =>
+        reportOperationalFailure(
+          'auth-mail-delivery-failed',
+          operationalAlerts.context,
+          operationalAlerts.receiver,
+        )
+    : () => {
+        console.error('认证邮件发送失败');
+        return Promise.resolve();
+      };
   const auth = betterAuth<BetterAuthOptions>({
     ...createBetterAuthOptions(new PostgresDialect({ pool: options.authPool }), options.schemaName),
     baseURL: options.baseURL,
@@ -99,16 +125,24 @@ export function createBetterAuthServer(options: BetterAuthServerOptions) {
           ),
         });
         try {
-          await deliverWithTimeout(options.sendVerificationEmail(data, request), mailTimeoutMs);
+          await deliverWithTimeout(
+            options.sendVerificationEmail(data, request),
+            mailTimeoutMs,
+            reportMailFailure,
+          );
         } catch {
-          console.error('认证邮件发送失败');
+          return;
         }
       },
     },
     emailAndPassword: {
       ...betterAuthCoreOptions.emailAndPassword,
       sendResetPassword: (data, request) =>
-        deliverWithTimeout(options.sendResetPassword(data, request), mailTimeoutMs),
+        deliverWithTimeout(
+          options.sendResetPassword(data, request),
+          mailTimeoutMs,
+          reportMailFailure,
+        ),
     },
   });
   return auth;

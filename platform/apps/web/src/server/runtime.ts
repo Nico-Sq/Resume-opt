@@ -18,6 +18,7 @@ import {
   type BetterAuthServer,
 } from '@resume/infrastructure/better-auth-server';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
+import { stderrOperationalAlertReceiver } from '@resume/infrastructure/operational-alert';
 import { PostgresAccountDeletionRequests } from '@resume/infrastructure/account-deletion';
 import { PostgresUserTransactionManager } from '@resume/infrastructure/resume-transactions';
 import type { IdentityProvider } from '@resume/application';
@@ -73,6 +74,14 @@ export function getBetterAuthServer() {
     secret: config.BETTER_AUTH_SECRET,
     sendVerificationEmail: authMailbox.sendVerificationEmail,
     sendResetPassword: authMailbox.sendResetPassword,
+    operationalAlerts: {
+      context: {
+        environment: config.APP_ENV,
+        release: process.env.APP_RELEASE ?? 'local',
+        recipient: 'invoking-operator-stderr',
+      },
+      receiver: stderrOperationalAlertReceiver,
+    },
   });
   return authServer;
 }

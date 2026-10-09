@@ -10,6 +10,7 @@
     "./better-auth-contract": "./src/identity/better-auth-contract.ts",
     "./better-auth-server": "./src/identity/better-auth-server.ts",
     "./migrations": "./src/database/migrations.ts",
+    "./operational-alert": "./src/observability/operational-alert.ts",
     "./postgres": "./src/postgres.ts",
     "./account-deletion": "./src/privacy/postgres-account-deletion.ts",
     "./privacy-cleanup": "./src/privacy/postgres-expired-resume-cleaner.ts",

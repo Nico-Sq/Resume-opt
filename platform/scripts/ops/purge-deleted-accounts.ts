@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { parseDatabaseToolConfig } from '@resume/config/server';
 import { PostgresAccountDeletionCleaner } from '@resume/infrastructure/account-deletion';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
+import { runWithOperationalAlert } from '@resume/infrastructure/operational-alert';
 
 export interface AccountCleanupOptions {
   environment: string;
@@ -70,9 +71,16 @@ export async function runAccountCleanup(options: AccountCleanupOptions) {
 }
 
 async function main() {
-  console.log(
-    JSON.stringify(await runAccountCleanup(parseAccountCleanupOptions(process.argv.slice(2)))),
-  );
+  const report = await runWithOperationalAlert({
+    type: 'privacy-cleanup-failed',
+    context: {
+      environment: 'test',
+      release: process.env.APP_RELEASE ?? 'local',
+      recipient: 'invoking-operator-stderr',
+    },
+    operation: () => runAccountCleanup(parseAccountCleanupOptions(process.argv.slice(2))),
+  });
+  console.log(JSON.stringify(report));
 }
 
 if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) await main();

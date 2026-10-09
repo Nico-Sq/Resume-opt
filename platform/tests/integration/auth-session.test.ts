@@ -15,6 +15,7 @@ import {
 import { runMigrations } from '@resume/infrastructure/migrations';
 import { PostgresAccountDeletionRequests } from '@resume/infrastructure/account-deletion';
 import { createPostgresPool } from '@resume/infrastructure/postgres';
+import type { OperationalAlertEvent } from '@resume/infrastructure/operational-alert';
 import { PostgresUserTransactionManager } from '@resume/infrastructure/resume-transactions';
 import { seedFixedResume } from '@resume/infrastructure/resume-seed';
 import { respondWithResume } from '../../apps/web/src/server/http/resume-response';
@@ -54,6 +55,7 @@ let verificationDeliveryError: Error | undefined;
 let resetDeliveryError: Error | undefined;
 let blockVerificationDelivery = false;
 let clientIpSequence = 1;
+const operationalAlerts: OperationalAlertEvent[] = [];
 
 function qualified(table: string): string {
   if (!/^[a-z_]+$/u.test(table)) throw new Error('测试表名不安全');
@@ -178,6 +180,16 @@ beforeAll(async () => {
       return mailbox.sendResetPassword(data, request);
     },
     mailTimeoutMs: 25,
+    operationalAlerts: {
+      context: {
+        environment: 'test',
+        release: 'v0.2-test',
+        recipient: 'integration-test-operator',
+      },
+      receiver: (event) => {
+        operationalAlerts.push(event);
+      },
+    },
   });
   authPeer = createBetterAuthServer({
     authPool,
@@ -437,8 +449,10 @@ describe('Better Auth real PostgreSQL handler and sessions', () => {
   });
 
   it('keeps identities after fake-mail failure and permits a safe retry', async () => {
+    const alertStart = operationalAlerts.length;
+    const canary = 'mail-secret-canary-v02-031';
     const email = `${randomUUID()}@example.cn`;
-    verificationDeliveryError = new Error('fake verification delivery failed');
+    verificationDeliveryError = new Error(`fake verification delivery failed ${canary}`);
     const registration = await call('/api/auth/sign-up/email', 'POST', {
       email,
       name: '邮件失败用户',
@@ -469,12 +483,20 @@ describe('Better Auth real PostgreSQL handler and sessions', () => {
       (await call('/api/auth/send-verification-email', 'POST', { email: timeoutEmail })).status,
     ).toBe(200);
 
-    resetDeliveryError = new Error('fake reset delivery failed');
+    resetDeliveryError = new Error(`fake reset delivery failed ${canary}`);
     const failedReset = await requestPasswordReset(email);
     resetDeliveryError = undefined;
     expect(failedReset.status).toBe(200);
     expect((await requestPasswordReset(email)).status).toBe(200);
     expect(latestMail('reset-password', email).token).toBeTruthy();
+
+    const deliveredAlerts = operationalAlerts.slice(alertStart);
+    expect(deliveredAlerts).toHaveLength(3);
+    expect(
+      deliveredAlerts.every(({ failureCode }) => failureCode === 'AUTH_MAIL_DELIVERY_FAILED'),
+    ).toBe(true);
+    expect(JSON.stringify(deliveredAlerts)).not.toContain(canary);
+    expect(JSON.stringify(deliveredAlerts)).not.toContain(email);
   });
 
   it('returns a token-free session, revokes logout immediately and blocks extra endpoints', async () => {
